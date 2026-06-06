@@ -1,0 +1,3 @@
+# Cloudflare Pages SPA fallback. Real files (/borland.json, /assets/*) are served
+# first; unmatched client routes (e.g. /studio) fall back to the app shell.
+/*  /index.html  200

@@ -1,0 +1,123 @@
+{
+  "meta": {
+    "id": "borland",
+    "name": "Borland — Surface",
+    "version": 1,
+    "createdAt": "2026-06-06T00:00:00.000Z",
+    "updatedAt": "2026-06-06T00:00:00.000Z",
+    "seed": 20260606
+  },
+  "dna": {
+    "rootPitchClasses": [0, 2, 3, 5, 7, 8, 10],
+    "keyCentre": 0,
+    "tempoRange": [54, 66],
+    "motif": {
+      "intervals": [0, 3, 5, 3],
+      "rhythm": [8, 4, 4, 8],
+      "subdivision": 8
+    },
+    "arc": [
+      {
+        "position": 0,
+        "macros": {
+          "darkness": 0.18,
+          "rhythmicWeight": 0.2,
+          "reverbSize": 0.8,
+          "filterPosition": 0.62,
+          "dissonance": 0.1,
+          "density": 0.3
+        }
+      },
+      {
+        "position": 0.5,
+        "macros": {
+          "darkness": 0.55,
+          "rhythmicWeight": 0.5,
+          "reverbSize": 0.85,
+          "filterPosition": 0.45,
+          "dissonance": 0.35,
+          "density": 0.5
+        }
+      },
+      {
+        "position": 1,
+        "macros": {
+          "darkness": 0.92,
+          "rhythmicWeight": 0.82,
+          "reverbSize": 0.9,
+          "filterPosition": 0.28,
+          "dissonance": 0.62,
+          "density": 0.72
+        }
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "id": "surface",
+      "name": "Surface",
+      "arcRange": [0, 0.5],
+      "synthModuleId": "driftPad",
+      "shaderModuleId": "oceanicField",
+      "audioParams": {
+        "scale": [0, 2, 3, 5, 7, 8, 10],
+        "harmonicGuardrails": { "allowedIntervals": [0, 3, 4, 5, 7, 12], "maxDissonance": 0.4 },
+        "density": 0.35,
+        "rhythm": { "subdivision": 8, "minGapSteps": 2, "maxVoicesPerBar": 6 },
+        "bass": { "enabled": true, "register": 36, "anchorPc": 0 },
+        "reverbSize": 0.85,
+        "voices": { "maxPolyphony": 6 }
+      },
+      "visualParams": {},
+      "gestureMap": [
+        { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
+        { "gesture": "touchX", "output": "gesture.touchX" },
+        { "gesture": "touchY", "output": "gesture.touchY" }
+      ],
+      "transition": { "kind": "crossfade", "durationSec": 6, "revealNextEdges": true }
+    }
+  ],
+  "audioGraph": {
+    "nodes": [
+      { "id": "composer", "kind": "composer", "moduleId": "dnaComposer", "params": {} },
+      { "id": "voices", "kind": "synthModule", "moduleId": "driftPad", "params": { "cutoff": 1400, "detune": 6, "level": 0.8 } },
+      { "id": "bass", "kind": "synthModule", "moduleId": "subBass", "params": { "level": 0.9 } },
+      { "id": "dryBus", "kind": "bus", "params": { "gain": 0.95 } },
+      { "id": "wetBus", "kind": "bus", "params": { "gain": 0.85 } },
+      { "id": "reverb", "kind": "effect", "moduleId": "reverb", "params": { "size": 0.85, "wet": 1 } },
+      { "id": "tape", "kind": "effect", "moduleId": "tapeWarmth", "params": { "drive": 1.4, "flutterDepth": 0.15, "flutterRate": 4, "hfCutoff": 7000 } },
+      { "id": "master", "kind": "master", "params": { "gain": 0.9 } },
+      { "id": "masterMeter", "kind": "analyser", "moduleId": "meter", "params": {} },
+      { "id": "bassMeter", "kind": "analyser", "moduleId": "meter", "params": {} },
+      { "id": "fft", "kind": "analyser", "moduleId": "fft", "params": { "bands": 4 } },
+      { "id": "wobble", "kind": "lfo", "params": { "frequency": 0.08, "min": 700, "max": 2400 } }
+    ],
+    "connections": [
+      { "from": "voices", "to": "reverb" },
+      { "from": "reverb", "to": "tape" },
+      { "from": "tape", "to": "wetBus" },
+      { "from": "wetBus", "to": "master" },
+      { "from": "bass", "to": "dryBus" },
+      { "from": "dryBus", "to": "master" },
+      { "from": "master", "to": "masterMeter" },
+      { "from": "bass", "to": "bassMeter" },
+      { "from": "master", "to": "fft" }
+    ]
+  },
+  "visualGraph": {
+    "layers": [
+      { "id": "field", "kind": "layer", "moduleId": "oceanicField", "blendMode": "normal", "opacity": 1, "params": { "fog": 0.4, "hue": 0.55, "flow": 0.3, "depth": 0.2 } }
+    ],
+    "postChain": [
+      { "id": "bloom", "kind": "postfx", "moduleId": "bloom", "params": { "strength": 0.8, "radius": 0.4, "threshold": 0.85 } },
+      { "id": "grain", "kind": "postfx", "moduleId": "filmGrain", "params": { "intensity": 0.25 } }
+    ]
+  },
+  "modulationMatrix": [
+    { "id": "r1", "source": "bassMeter.level", "target": "field.fog", "amount": 0.8, "curve": "sCurve", "smoothing": 120, "rate": "control", "enabled": true },
+    { "id": "r2", "source": "gesture.zoomDepth", "target": "voices.cutoff", "amount": 1, "curve": "exp", "smoothing": 80, "rate": "control", "enabled": true },
+    { "id": "r3", "source": "wobble.out", "target": "voices.cutoff", "amount": 0.5, "curve": "linear", "smoothing": 0, "rate": "audio", "enabled": true },
+    { "id": "r4", "source": "fft.low", "target": "field.flow", "amount": 0.5, "curve": "linear", "smoothing": 150, "rate": "control", "enabled": true },
+    { "id": "r5", "source": "masterMeter.level", "target": "bloom.strength", "amount": 0.6, "curve": "linear", "smoothing": 100, "rate": "control", "enabled": true }
+  ]
+}

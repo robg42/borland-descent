@@ -1,0 +1,33 @@
+{
+  "name": "borland-generative",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Borland Generative — a smartphone-first generative music & visual experience, and the studio used to author it (v1: the creative loop).",
+  "workspaces": [
+    "packages/*",
+    "app"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace app",
+    "build": "npm run build --workspace app",
+    "preview": "npm run preview --workspace app",
+    "typecheck": "tsc --noEmit -p packages/engine/tsconfig.json && tsc --noEmit -p app/tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run lint && npm run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@types/node": "^25.9.0",
+    "eslint": "^10.4.0",
+    "typescript": "^6.0.0",
+    "typescript-eslint": "^8.60.0",
+    "vitest": "^4.1.0"
+  }
+}

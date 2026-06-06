@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@borland/engine": ["../packages/engine/src/index.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

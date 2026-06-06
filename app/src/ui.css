@@ -1,0 +1,205 @@
+/* Borland Generative — chrome. Dark, cinematic, instrument-like. The player is
+   mostly canvas; this styles only the thin surface around it. */
+
+:root {
+  --bg: #04070a;
+  --bg-2: #0a1014;
+  --ink: #e9e6df;
+  --ink-dim: #9aa3a3;
+  --ink-faint: #525c61;
+  --accent: #79c7be; /* muted deep-water teal */
+  --accent-warm: #c98b6b; /* faint warm counterpoint — the darker centre, foreshadowed */
+  --hairline: rgba(233, 230, 223, 0.08);
+  --panel: rgba(255, 255, 255, 0.015);
+
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  background: var(--bg);
+}
+
+/* ---- Player ---------------------------------------------------------------- */
+.player {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  overflow: hidden;
+}
+.player__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  width: 100%;
+  border: 0;
+  cursor: pointer;
+  text-align: center;
+  color: var(--ink);
+  background:
+    radial-gradient(125% 90% at 50% 32%, rgba(16, 40, 44, 0.4), rgba(2, 4, 6, 0.92) 72%),
+    var(--bg);
+  transition: opacity 1.6s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+/* fine grain for atmosphere */
+.veil::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.veil--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wordmark {
+  position: relative;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(2.9rem, 13vw, 6.5rem);
+  line-height: 0.92;
+  letter-spacing: 0.04em;
+  font-optical-sizing: auto;
+}
+.wordmark em {
+  font-style: italic;
+  color: var(--accent);
+}
+.tagline {
+  position: relative;
+  font-size: 0.72rem;
+  letter-spacing: 0.52em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  padding-left: 0.52em;
+}
+.begin {
+  position: relative;
+  margin-top: 0.5rem;
+  font-size: 0.76rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.begin[data-state='loading'] {
+  color: var(--ink-faint);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wordmark {
+    animation: rise 1.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .tagline {
+    animation: rise 1.5s cubic-bezier(0.2, 0.7, 0.2, 1) 0.28s both;
+  }
+  .begin {
+    animation:
+      rise 1.5s cubic-bezier(0.2, 0.7, 0.2, 1) 0.56s both,
+      breathe 3.8s ease-in-out 2s infinite;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+      filter: blur(7px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: none;
+    }
+  }
+  @keyframes breathe {
+    0%,
+    100% {
+      opacity: 0.5;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+}
+
+/* ---- Studio ---------------------------------------------------------------- */
+.studio {
+  min-height: 100dvh;
+  background: linear-gradient(180deg, var(--bg-2), var(--bg) 55%);
+  color: var(--ink);
+}
+.studio__bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.3rem;
+  border-bottom: 1px solid var(--hairline);
+}
+.studio__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: 1.6rem;
+  letter-spacing: 0.03em;
+}
+.studio__tag {
+  font-size: 0.66rem;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.studio__body {
+  padding: 1.4rem 1.3rem;
+  max-width: 64rem;
+}
+.panel {
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  padding: 1.15rem 1.25rem;
+  background: var(--panel);
+}
+.panel__label {
+  margin: 0 0 0.7rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.muted {
+  margin: 0 0 0.9rem;
+  color: var(--ink-dim);
+  line-height: 1.75;
+  font-size: 0.86rem;
+}
+.muted:last-child {
+  margin-bottom: 0;
+}
+.link {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(121, 199, 190, 0.35);
+  padding-bottom: 1px;
+}
+.link:hover {
+  border-bottom-color: var(--accent);
+}

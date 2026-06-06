@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# test / tooling caches
+coverage/
+.vite/
+.eslintcache
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# editor / OS cruft
+.DS_Store
+*.log
+.idea/
+.vscode/*
+!.vscode/extensions.json
