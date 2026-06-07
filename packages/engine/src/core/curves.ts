@@ -21,14 +21,16 @@ export function smoothingCoeff(ms: number, dt: number): number {
 
 /**
  * Shape a source value before scaling. Sources are roughly in [-1,1] (bipolar) or
- * [0,1] (unipolar); curves preserve sign so they work for both.
+ * [0,1] (unipolar); exp/log/sCurve preserve sign so they work for both, while
+ * `invert` is a unipolar mirror (1−x), clamped to [0,1] so a bipolar source cannot
+ * push it out of range.
  */
 export function applyCurve(x: number, curve: CurveKind): number {
   switch (curve) {
     case 'linear':
       return x;
     case 'invert':
-      return 1 - x; // intended for unipolar sources
+      return 1 - clamp(x, 0, 1); // unipolar mirror, bounded to [0,1]
     case 'exp':
       return Math.sign(x) * x * x; // emphasise the extremes
     case 'log':

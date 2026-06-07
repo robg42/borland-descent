@@ -66,7 +66,7 @@
         "rhythm": { "subdivision": 8, "minGapSteps": 2, "maxVoicesPerBar": 6 },
         "bass": { "enabled": true, "register": 36, "anchorPc": 0 },
         "reverbSize": 0.85,
-        "voices": { "maxPolyphony": 6 }
+        "voices": { "maxPolyphony": 8 }
       },
       "visualParams": {},
       "gestureMap": [
@@ -89,7 +89,7 @@
         "rhythm": { "subdivision": 8, "minGapSteps": 2, "maxVoicesPerBar": 6 },
         "bass": { "enabled": true, "register": 30, "anchorPc": 0 },
         "reverbSize": 0.92,
-        "voices": { "maxPolyphony": 6 }
+        "voices": { "maxPolyphony": 10 }
       },
       "visualParams": {},
       "gestureMap": [

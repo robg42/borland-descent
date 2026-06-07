@@ -55,6 +55,7 @@ export class VisualEngine {
   private readonly layer: VisualLayer;
   private readonly bloom: UnrealBloomPass;
   private readonly grain: ShaderPass;
+  private readonly output: OutputPass;
   private readonly resizeObserver: ResizeObserver;
   private contextLost = false;
   readonly reducedMotion: boolean;
@@ -140,7 +141,8 @@ export class VisualEngine {
     });
 
     // 4. output (tone-mapping + colour space — always last)
-    this.composer.addPass(new OutputPass());
+    this.output = new OutputPass();
+    this.composer.addPass(this.output);
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.container);
@@ -180,6 +182,7 @@ export class VisualEngine {
     this.layer.dispose();
     this.bloom.dispose();
     this.grain.dispose();
+    this.output.dispose();
     this.composer.dispose();
     this.renderer.dispose();
     canvas.parentNode?.removeChild(canvas);

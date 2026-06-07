@@ -41,7 +41,7 @@ export class AudioEngine {
     rng: Rng,
     private readonly registry: SignalRegistry,
   ) {
-    this.pad = createSynth(scene.synthModuleId);
+    this.pad = createSynth(scene.synthModuleId, { maxPolyphony: scene.audioParams.voices.maxPolyphony });
     this.bass = createSynth('subBass');
     this.composer = new Composer(this.pad, this.bass, patch.dna, scene.audioParams, rng);
   }

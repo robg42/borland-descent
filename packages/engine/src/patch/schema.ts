@@ -131,7 +131,7 @@ export const SceneAudioParamsSchema = z.object({
     anchorPc: pitchClass.optional(),
   }),
   reverbSize: unipolar,
-  voices: z.object({ maxPolyphony: z.number().int().positive() }), // composer-enforced
+  voices: z.object({ maxPolyphony: z.number().int().positive() }), // applied to the scene's polyphonic synth
 });
 export const SceneTransitionSchema = z.object({
   kind: z.enum(['crossfade', 'morph', 'none']).default('none'),
