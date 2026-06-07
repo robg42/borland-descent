@@ -58,7 +58,14 @@ export const DnaSchema = z.object({
   keyCentre: pitchClass,
   tempoRange: z.tuple([z.number().positive(), z.number().positive()]),
   motif: SeedMotifSchema,
-  arc: z.array(ArcKeyframeSchema).min(2), // models the WHOLE 0..1 range
+  // models the WHOLE 0..1 range; keyframes must be strictly ascending so macrosAt
+  // (which assumes a sorted arc) can never silently mis-interpolate an import.
+  arc: z
+    .array(ArcKeyframeSchema)
+    .min(2)
+    .refine((ks) => ks.every((k, i) => i === 0 || k.position > ks[i - 1]!.position), {
+      message: 'arc keyframes must be ordered by strictly ascending position',
+    }),
 });
 
 // ---- audio graph (nodes carry VALUES; port DEFS live in the engine registry) ---

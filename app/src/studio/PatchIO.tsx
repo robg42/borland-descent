@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { validatePatch, type Patch } from '@borland/engine';
+import { safeValidatePatch, type Patch } from '@borland/engine';
 
 interface Props {
   getPatch: () => Patch | null;
@@ -30,12 +30,21 @@ export function PatchIO({ getPatch, onImport }: Props) {
 
   const importPatch = async (file: File): Promise<void> => {
     setError(null);
+    let json: unknown;
     try {
-      const json: unknown = JSON.parse(await file.text());
-      onImport(validatePatch(json));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not read that patch.');
+      json = JSON.parse(await file.text());
+    } catch {
+      setError('That file is not valid JSON.');
+      return;
     }
+    const result = safeValidatePatch(json);
+    if (!result.success) {
+      const issue = result.error.issues[0];
+      const where = issue?.path.join('.') || '(root)';
+      setError(issue ? `Invalid patch at ${where}: ${issue.message}` : 'That patch did not validate.');
+      return;
+    }
+    onImport(result.patch);
   };
 
   return (

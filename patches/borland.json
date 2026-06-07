@@ -116,10 +116,10 @@
       { "id": "wobble", "kind": "lfo", "params": { "frequency": 0.1, "min": -220, "max": 220 } }
     ],
     "connections": [
-      { "from": "voices", "to": "reverb" },
+      { "from": "voices", "to": "wetBus" },
+      { "from": "wetBus", "to": "reverb" },
       { "from": "reverb", "to": "tape" },
-      { "from": "tape", "to": "wetBus" },
-      { "from": "wetBus", "to": "master" },
+      { "from": "tape", "to": "master" },
       { "from": "bass", "to": "dryBus" },
       { "from": "dryBus", "to": "master" },
       { "from": "master", "to": "masterMeter" },
