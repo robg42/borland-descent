@@ -24,7 +24,7 @@ export function PlayerView() {
     };
   }, []);
 
-  const engine = useEngine(patch, container);
+  const engine = useEngine(patch, container, patch ? 1 : 0);
 
   const begin = useCallback(() => {
     if (!engine || busy || started) return;
@@ -32,6 +32,7 @@ export function PlayerView() {
     void engine
       .start()
       .then(() => setStarted(true))
+      .catch((err: unknown) => console.error('[borland] could not begin', err))
       .finally(() => setBusy(false));
   }, [engine, busy, started]);
 

@@ -90,7 +90,7 @@
       { "id": "masterMeter", "kind": "analyser", "moduleId": "meter", "params": {} },
       { "id": "bassMeter", "kind": "analyser", "moduleId": "meter", "params": {} },
       { "id": "fft", "kind": "analyser", "moduleId": "fft", "params": { "bands": 4 } },
-      { "id": "wobble", "kind": "lfo", "params": { "frequency": 0.08, "min": 700, "max": 2400 } }
+      { "id": "wobble", "kind": "lfo", "params": { "frequency": 0.1, "min": -220, "max": 220 } }
     ],
     "connections": [
       { "from": "voices", "to": "reverb" },
@@ -109,8 +109,8 @@
       { "id": "field", "kind": "layer", "moduleId": "oceanicField", "blendMode": "normal", "opacity": 1, "params": { "fog": 0.4, "hue": 0.55, "flow": 0.3, "depth": 0.2 } }
     ],
     "postChain": [
-      { "id": "bloom", "kind": "postfx", "moduleId": "bloom", "params": { "strength": 0.8, "radius": 0.4, "threshold": 0.85 } },
-      { "id": "grain", "kind": "postfx", "moduleId": "filmGrain", "params": { "intensity": 0.25 } }
+      { "id": "bloom", "kind": "postfx", "moduleId": "bloom", "params": { "strength": 0.9, "radius": 0.6, "threshold": 0.3 } },
+      { "id": "grain", "kind": "postfx", "moduleId": "filmGrain", "params": { "intensity": 0.05 } }
     ]
   },
   "modulationMatrix": [

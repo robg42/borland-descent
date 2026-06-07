@@ -39,4 +39,18 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // AudioWorklet processors run in AudioWorkletGlobalScope (not the DOM); give
+    // ESLint their globals. Kept as plain .js so Vite bundles them verbatim.
+    files: ['**/*.worklet.js'],
+    languageOptions: {
+      globals: {
+        AudioWorkletProcessor: 'readonly',
+        registerProcessor: 'readonly',
+        sampleRate: 'readonly',
+        currentTime: 'readonly',
+        currentFrame: 'readonly',
+      },
+    },
+  },
 );

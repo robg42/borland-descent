@@ -178,6 +178,9 @@ export type SceneAudioParams = z.infer<typeof SceneAudioParamsSchema>;
 export type SceneTransition = z.infer<typeof SceneTransitionSchema>;
 export type Scene = z.infer<typeof SceneSchema>;
 
+/** A port value: a scalar or a vector (vector ports carry number[]). */
+export type Scalar = number | number[];
+
 // ---- validation ----------------------------------------------------------------
 export function validatePatch(input: unknown): Patch {
   return PatchSchema.parse(input);

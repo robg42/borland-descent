@@ -18,6 +18,7 @@ export { Rng, createRng, mulberry32, hashStringToSeed } from './core/rng';
 // Ports
 export { makePortRef, parsePortRef, isCompatible, clampToKind, PORT_KINDS } from './core/ports';
 export type { PortKind, PortRef, PortDef, PortDirection } from './core/ports';
+export type { InputPortInfo, OutputPortInfo } from './core/registry';
 
 // Patch document
 export { PatchSchema, validatePatch, safeValidatePatch } from './patch/schema';

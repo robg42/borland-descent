@@ -56,5 +56,9 @@ export default defineConfig({
   build: {
     outDir: resolve(repoRoot, 'dist'),
     emptyOutDir: true,
+    // Never inline AudioWorklet modules as data: URIs — iOS Safari refuses
+    // audioWorklet.addModule() from a data: URL. Emit them as real asset files.
+    assetsInlineLimit: (filePath: string) =>
+      filePath.endsWith('.worklet.js') ? false : undefined,
   },
 });
