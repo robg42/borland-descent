@@ -7,10 +7,10 @@ import { MatrixTable } from './MatrixTable';
 import { PatchIO } from './PatchIO';
 
 /**
- * The studio: a live engine instance against the working Patch, beside the controls.
- * The scene selector rebuilds the engine for a chosen scene (so both structurally
- * different scenes can be auditioned); scene parameters and the modulation matrix
- * edit the engine live; the arc can be scrubbed; the Patch round-trips to JSON.
+ * The studio: a live engine instance against the working Patch. The live preview +
+ * transport sit in a sticky stage pinned to the top, so you see and hear changes as
+ * you make them; the editing panels scroll beneath. The scene selector rebuilds the
+ * engine for a chosen scene (so both structurally different scenes can be auditioned).
  */
 export function StudioView() {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
@@ -143,75 +143,70 @@ export function StudioView() {
         <h1 className="studio__title">Borland</h1>
         <span className="studio__tag">descent · studio</span>
       </header>
-      <div className="studio__layout">
-        <div className="studio__main">
-          <section className="panel">
-            <div className="panel__head">
-              <p className="panel__label">transport</p>
-            </div>
-            <TransportBar
-              engine={engine}
-              started={started}
-              busy={busy}
-              playing={playing}
-              arc={arc}
-              onBegin={begin}
-              onToggle={toggle}
-              onArc={onArc}
-            />
-            {scenes.length > 1 && (
-              <div className="row" style={{ marginTop: '0.9rem' }}>
-                <span className="ctl__name">
-                  <b>scene</b>
-                </span>
-                <select
-                  className="field"
-                  style={{ maxWidth: '14rem' }}
-                  value={sceneIndex}
-                  onChange={(e) => selectScene(Number(e.target.value))}
-                >
-                  {scenes.map((s, i) => (
-                    <option key={s.id} value={i}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </section>
 
-          <section className="panel">
-            <div className="panel__head">
-              <p className="panel__label">scene parameters</p>
-            </div>
-            <SceneParams engine={engine} inputs={inputs} />
-          </section>
-
-          <section className="panel">
-            <div className="panel__head">
-              <p className="panel__label">modulation matrix</p>
-            </div>
-            <MatrixTable routes={routes} inputs={inputs} outputs={outputs} onChange={applyRoutes} />
-          </section>
-
-          <section className="panel">
-            <div className="panel__head">
-              <p className="panel__label">patch</p>
-            </div>
-            <PatchIO getPatch={() => engine?.patch ?? patch} onImport={onImport} />
-          </section>
+      <div className="studio__stage">
+        <div className="studio__preview">
+          <span className="studio__previewLabel">live</span>
+          <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
         </div>
-
-        <aside className="studio__aside">
-          <div className="studio__preview">
-            <span className="studio__previewLabel">live</span>
-            <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
-          </div>
-          <p className="hint" style={{ marginTop: '0.6rem' }}>
+        <div className="studio__stageControls">
+          <TransportBar
+            engine={engine}
+            started={started}
+            busy={busy}
+            playing={playing}
+            arc={arc}
+            onBegin={begin}
+            onToggle={toggle}
+            onArc={onArc}
+          />
+          {scenes.length > 1 && (
+            <div className="row">
+              <span className="ctl__name">
+                <b>scene</b>
+              </span>
+              <select
+                className="field"
+                style={{ maxWidth: '14rem' }}
+                value={sceneIndex}
+                onChange={(e) => selectScene(Number(e.target.value))}
+              >
+                {scenes.map((s, i) => (
+                  <option key={s.id} value={i}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <p className="hint">
             Drag, scroll or pinch the preview to move through the arc. Edits apply live;
             switching scene rebuilds the engine.
           </p>
-        </aside>
+        </div>
+      </div>
+
+      <div className="studio__panels">
+        <section className="panel">
+          <div className="panel__head">
+            <p className="panel__label">scene parameters</p>
+          </div>
+          <SceneParams engine={engine} inputs={inputs} />
+        </section>
+
+        <section className="panel">
+          <div className="panel__head">
+            <p className="panel__label">modulation matrix</p>
+          </div>
+          <MatrixTable routes={routes} inputs={inputs} outputs={outputs} onChange={applyRoutes} />
+        </section>
+
+        <section className="panel">
+          <div className="panel__head">
+            <p className="panel__label">patch</p>
+          </div>
+          <PatchIO getPatch={() => engine?.patch ?? patch} onImport={onImport} />
+        </section>
       </div>
     </div>
   );
