@@ -205,32 +205,51 @@ body {
 }
 
 /* ---- Studio controls ------------------------------------------------------- */
-.studio__layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1.2rem;
-  padding: 1.2rem 1.3rem 3rem;
-  max-width: 70rem;
+/* A sticky stage (live preview + transport) pinned to the top, with the editing
+   panels scrolling beneath — so you see and hear changes as you make them. */
+.studio__stage {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.1rem 1.5rem;
+  padding: 1rem 1.3rem 1.15rem;
+  background: rgba(4, 7, 10, 0.93);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--hairline);
 }
-@media (min-width: 880px) {
-  .studio__layout {
-    grid-template-columns: minmax(0, 1fr) 22rem;
-    align-items: start;
-  }
-  .studio__aside {
-    position: sticky;
-    top: 1.2rem;
-  }
+.studio__stageControls {
+  flex: 1 1 15rem;
+  min-width: 13rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 0.15rem;
+}
+.studio__panels {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding: 1.3rem;
+  max-width: 56rem;
 }
 .studio__preview {
   position: relative;
-  width: 100%;
+  flex: 0 0 auto;
+  height: min(46vh, 30rem);
   aspect-ratio: 9 / 16;
-  max-height: 70vh;
   border: 1px solid var(--hairline);
   border-radius: 4px;
   overflow: hidden;
   background: #000;
+}
+@media (max-width: 640px) {
+  .studio__preview {
+    height: 34vh;
+  }
 }
 .studio__previewLabel {
   position: absolute;
@@ -244,9 +263,6 @@ body {
   pointer-events: none;
 }
 
-.panel + .panel {
-  margin-top: 1.1rem;
-}
 .panel__head {
   display: flex;
   align-items: baseline;

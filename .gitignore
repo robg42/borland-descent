@@ -5,6 +5,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# deploy
+.vercel
+
 # test / tooling caches
 coverage/
 .vite/
