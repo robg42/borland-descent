@@ -55,7 +55,7 @@ export function PlayerView() {
         <span className="wordmark">
           Bor<em>land</em>
         </span>
-        <span className="tagline">generative</span>
+        <span className="tagline">descent</span>
         <span className="begin" data-state={ready ? 'ready' : 'loading'}>
           {label}
         </span>

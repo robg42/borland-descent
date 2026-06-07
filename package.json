@@ -1,9 +1,9 @@
 {
-  "name": "borland-generative",
+  "name": "borland-descent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Borland Generative — a smartphone-first generative music & visual experience, and the studio used to author it (v1: the creative loop).",
+  "description": "Borland Descent — a smartphone-first generative music & visual experience, and the studio used to author it (v1: the creative loop).",
   "workspaces": [
     "packages/*",
     "app"

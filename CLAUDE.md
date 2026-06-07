@@ -1,8 +1,8 @@
-# CLAUDE.md — Borland Generative
+# CLAUDE.md — Borland Descent
 
 ## Project
 
-Borland Generative is a browser-based, smartphone-first generative music & visual
+Borland Descent is a browser-based, smartphone-first generative music & visual
 experience, and the minimal studio used to author it. This repo is **v1: the
 creative loop** — one engine; one or two continuous generative scenes; zoom mapped
 to a position along an emotional arc; a handful of real audio↔visual modulation

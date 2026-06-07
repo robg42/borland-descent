@@ -1,4 +1,4 @@
-# Borland Generative
+# Borland Descent
 
 A browser-based, smartphone-first **generative music & visual experience**, and the
 minimal studio used to author it — a living collaboration between two people in

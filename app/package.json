@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Borland Generative player (/) and studio (/studio). Runs the engine against the working Patch.",
+  "description": "Borland Descent player (/) and studio (/studio). Runs the engine against the working Patch.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
