@@ -1,9 +1,10 @@
-import type {
-  CurveKind,
-  InputPortInfo,
-  ModulationRoute,
-  OutputPortInfo,
-  RouteRate,
+import {
+  isCompatible,
+  type CurveKind,
+  type InputPortInfo,
+  type ModulationRoute,
+  type OutputPortInfo,
+  type RouteRate,
 } from '@borland/engine';
 
 interface Props {
@@ -20,6 +21,8 @@ const RATES: RouteRate[] = ['control', 'audio'];
  * The modulation matrix as a table (source, target, amount, curve, rate). The
  * studio's working patch is the source of truth; every edit is applied to the live
  * engine via onChange → engine.setRoutes (audio-rate routes are re-wired natively).
+ * Target options are filtered to ports type-compatible with the chosen source, so the
+ * table cannot author a route the engine would reject (golden rule §4).
  */
 export function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
   const update = (i: number, patch: Partial<ModulationRoute>): void => {
@@ -28,13 +31,26 @@ export function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
   const remove = (i: number): void => {
     onChange(routes.filter((_, idx) => idx !== i));
   };
+  /** Inputs whose kind is compatible with the given source ref (all, if unknown). */
+  const targetsFor = (sourceRef: string): InputPortInfo[] => {
+    const srcKind = outputs.find((o) => o.ref === sourceRef)?.kind;
+    return srcKind ? inputs.filter((inp) => isCompatible(srcKind, inp.kind)) : inputs;
+  };
+  /** Change a route's source, keeping its target compatible (reset it if not). */
+  const changeSource = (i: number, r: ModulationRoute, source: string): void => {
+    const opts = targetsFor(source);
+    const target = opts.some((o) => o.ref === r.target) ? r.target : (opts[0]?.ref ?? r.target);
+    update(i, { source, target });
+  };
   const add = (): void => {
+    const source = outputs[0];
+    const target = source ? (targetsFor(source.ref)[0] ?? inputs[0]) : inputs[0];
     onChange([
       ...routes,
       {
-        id: crypto.randomUUID(),
-        source: outputs[0]?.ref ?? '',
-        target: inputs[0]?.ref ?? '',
+        id: routeId(),
+        source: source?.ref ?? '',
+        target: target?.ref ?? '',
         amount: 0.5,
         curve: 'linear',
         smoothing: 80,
@@ -66,12 +82,18 @@ export function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
               <td>
                 <input
                   type="checkbox"
+                  aria-label={`route ${i + 1} enabled`}
                   checked={r.enabled !== false}
                   onChange={(e) => update(i, { enabled: e.target.checked })}
                 />
               </td>
               <td>
-                <select className="field" value={r.source} onChange={(e) => update(i, { source: e.target.value })}>
+                <select
+                  className="field"
+                  aria-label="source port"
+                  value={r.source}
+                  onChange={(e) => changeSource(i, r, e.target.value)}
+                >
                   {outputs.map((o) => (
                     <option key={o.ref} value={o.ref}>
                       {o.ref}
@@ -80,8 +102,13 @@ export function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
                 </select>
               </td>
               <td>
-                <select className="field" value={r.target} onChange={(e) => update(i, { target: e.target.value })}>
-                  {inputs.map((o) => (
+                <select
+                  className="field"
+                  aria-label="target port"
+                  value={r.target}
+                  onChange={(e) => update(i, { target: e.target.value })}
+                >
+                  {targetsFor(r.source).map((o) => (
                     <option key={o.ref} value={o.ref}>
                       {o.ref}
                     </option>
@@ -92,6 +119,7 @@ export function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
                 <input
                   className="field matrix__num"
                   type="number"
+                  aria-label="amount"
                   step={0.05}
                   min={-1}
                   max={1}
@@ -102,6 +130,7 @@ export function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
               <td>
                 <select
                   className="field"
+                  aria-label="curve"
                   value={r.curve}
                   onChange={(e) => update(i, { curve: e.target.value as CurveKind })}
                 >
@@ -115,6 +144,7 @@ export function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
               <td>
                 <select
                   className="field"
+                  aria-label="rate"
                   value={r.rate}
                   onChange={(e) => update(i, { rate: e.target.value as RouteRate })}
                 >
@@ -146,6 +176,18 @@ export function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
       </div>
     </div>
   );
+}
+
+/**
+ * A stable route id, with a fallback for non-secure contexts — `crypto.randomUUID`
+ * is undefined on a plain-http LAN address (e.g. testing on iOS Safari over the
+ * local network), where calling it would throw and silently break "add route".
+ */
+function routeId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function clampAmount(n: number): number {

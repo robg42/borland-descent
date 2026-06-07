@@ -3,7 +3,7 @@ import { clamp } from '../../core/curves';
 import { makePortRef } from '../../core/ports';
 import type { SignalRegistry } from '../../core/registry';
 import type { Scalar } from '../../patch/schema';
-import { numParam, type SynthModule } from './types';
+import { numParam, type SynthModule, type SynthOptions } from './types';
 
 const CUTOFF_MIN = 80;
 const CUTOFF_MAX = 12000;
@@ -13,12 +13,12 @@ const CUTOFF_MAX = 12000;
  * lowpass cutoff is the demonstration port for modulation: writable control-rate
  * (zoom → cutoff) and connectable audio-rate (LFO → cutoff) at the same time.
  */
-export function createDriftPad(): SynthModule {
+export function createDriftPad(opts?: SynthOptions): SynthModule {
   const poly = new Tone.PolySynth(Tone.Synth, {
     oscillator: { type: 'sawtooth' },
     envelope: { attack: 1.4, decay: 0.8, sustain: 0.7, release: 4.5 },
   });
-  poly.maxPolyphony = 8;
+  poly.maxPolyphony = Math.max(1, Math.round(opts?.maxPolyphony ?? 8));
 
   const filter = new Tone.Filter({ frequency: 1400, type: 'lowpass', Q: 0.6 });
   const out = new Tone.Gain(0.8);

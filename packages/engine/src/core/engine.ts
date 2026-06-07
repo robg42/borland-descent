@@ -7,7 +7,7 @@ import { Rng } from './rng';
 import { parsePortRef, type PortRef } from './ports';
 import { AudioEngine } from '../audio/audioEngine';
 import { VisualEngine } from '../visual/visualEngine';
-import { Matrix } from '../modulation/matrix';
+import { Matrix, restoreDroppedControlTargets } from '../modulation/matrix';
 import { GestureController } from '../gesture/gesture';
 
 /**
@@ -145,9 +145,13 @@ export class Engine {
     this.routes = routes;
     this.patch.modulationMatrix = routes;
     if (this.matrix) {
+      const before = this.matrix.controlTargets();
       this.matrix.dispose();
       this.matrix = new Matrix(routes, this.registry);
       this.matrix.setup();
+      // any input that lost all its control routes must relax back to base,
+      // otherwise it stays frozen at its last modulated value.
+      restoreDroppedControlTargets(before, this.matrix.controlTargets(), this.registry);
     }
   }
 

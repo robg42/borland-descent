@@ -1,7 +1,7 @@
 import { createDriftPad } from './driftPad';
 import { createSubBass } from './subBass';
 import { createVoidChoir } from './voidChoir';
-import type { SynthFactory, SynthModule } from './types';
+import type { SynthFactory, SynthModule, SynthOptions } from './types';
 
 /** Registry of synth modules by id. Scenes select their voices/bass by these keys. */
 const FACTORIES: Record<string, SynthFactory> = {
@@ -10,9 +10,9 @@ const FACTORIES: Record<string, SynthFactory> = {
   voidChoir: createVoidChoir,
 };
 
-export function createSynth(moduleId: string): SynthModule {
+export function createSynth(moduleId: string, opts?: SynthOptions): SynthModule {
   const factory = FACTORIES[moduleId] ?? createDriftPad;
-  return factory();
+  return factory(opts);
 }
 
-export type { SynthModule, SynthFactory } from './types';
+export type { SynthModule, SynthFactory, SynthOptions } from './types';

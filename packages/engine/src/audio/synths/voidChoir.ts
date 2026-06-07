@@ -3,7 +3,7 @@ import { clamp } from '../../core/curves';
 import { makePortRef } from '../../core/ports';
 import type { SignalRegistry } from '../../core/registry';
 import type { Scalar } from '../../patch/schema';
-import { numParam, type SynthModule } from './types';
+import { numParam, type SynthModule, type SynthOptions } from './types';
 
 const CUTOFF_MIN = 60;
 const CUTOFF_MAX = 9000;
@@ -14,7 +14,7 @@ const CUTOFF_MAX = 9000;
  * saw), proving scenes select different synth MODULES, not just parameters. Exposes
  * the same core ports (cutoff, level) so the global matrix routes carry across.
  */
-export function createVoidChoir(): SynthModule {
+export function createVoidChoir(opts?: SynthOptions): SynthModule {
   const poly = new Tone.PolySynth(Tone.FMSynth, {
     harmonicity: 1.41,
     modulationIndex: 7,
@@ -23,7 +23,7 @@ export function createVoidChoir(): SynthModule {
     modulation: { type: 'triangle' },
     modulationEnvelope: { attack: 3, decay: 1.5, sustain: 0.5, release: 3.5 },
   });
-  poly.maxPolyphony = 10;
+  poly.maxPolyphony = Math.max(1, Math.round(opts?.maxPolyphony ?? 10));
 
   const filter = new Tone.Filter({ frequency: 800, type: 'lowpass', Q: 1.1 });
   const out = new Tone.Gain(0.7);

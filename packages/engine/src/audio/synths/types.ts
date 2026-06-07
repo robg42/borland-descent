@@ -17,7 +17,13 @@ export interface SynthModule {
   dispose(): void;
 }
 
-export type SynthFactory = () => SynthModule;
+/** Construction options shared by synth modules (polyphonic modules honour the cap). */
+export interface SynthOptions {
+  /** Voice cap for polyphonic modules; ignored by monophonic ones. */
+  maxPolyphony?: number;
+}
+
+export type SynthFactory = (opts?: SynthOptions) => SynthModule;
 
 /** Read a scalar param as a number with a fallback. */
 export function numParam(params: Record<string, Scalar>, key: string, fallback: number): number {
