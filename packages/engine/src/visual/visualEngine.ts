@@ -95,9 +95,11 @@ export class VisualEngine {
     this.composer.setPixelRatio(dpr);
     this.composer.setSize(w, h);
 
-    // 1. the scene's generative shader layer
+    // 1. the scene's generative shader layer — the SCENE chooses the module, so
+    // different scenes are structurally different worlds (the layer node id stays
+    // stable so the matrix's field.* routes carry across scenes).
     const layerNode = opts.patch.visualGraph.layers[0];
-    const moduleId = layerNode?.moduleId ?? opts.scene.shaderModuleId;
+    const moduleId = opts.scene.shaderModuleId;
     this.layer = createLayer(moduleId);
     this.composer.addPass(this.layer.pass);
     this.layer.registerPorts(layerNode?.id ?? 'field', opts.registry, layerNode?.params ?? {});

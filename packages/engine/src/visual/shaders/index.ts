@@ -1,9 +1,11 @@
 import { createOceanicField } from './oceanicField';
+import { createAbyss } from './abyss';
 import type { VisualLayer, VisualLayerFactory } from './types';
 
 /** Registry of visual layer modules by id. Scenes select their world by these keys. */
 const FACTORIES: Record<string, VisualLayerFactory> = {
   oceanicField: createOceanicField,
+  abyss: createAbyss,
 };
 
 export function createLayer(moduleId: string): VisualLayer {

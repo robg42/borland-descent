@@ -44,11 +44,12 @@ export class Engine {
 
   constructor(opts: EngineOptions) {
     this.patch = opts.patch;
-    const scene = opts.patch.scenes[0];
+    const scene = opts.patch.scenes[opts.sceneIndex ?? 0] ?? opts.patch.scenes[0];
     if (!scene) throw new Error('Patch has no scenes');
     this.scene = scene;
     this.routes = opts.patch.modulationMatrix;
     this.rng = new Rng(opts.patch.meta.seed);
+    this.manualArc = Math.min(1, Math.max(0, opts.initialArc ?? 0));
     this.reducedMotion =
       opts.reducedMotion ??
       (typeof window !== 'undefined' &&
@@ -66,6 +67,7 @@ export class Engine {
         reducedMotion: this.reducedMotion,
       });
       this.gesture = new GestureController(opts.container);
+      this.gesture.setArcPosition(this.manualArc); // preserve arc across a scene rebuild
       this.gesture.registerPorts(this.registry);
       // a still, inviting first frame before audio is unlocked
       this.visual.applyArc(this.arcPosition);

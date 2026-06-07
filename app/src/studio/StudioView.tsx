@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { JsonPatchStore, type ModulationRoute, type Patch } from '@borland/engine';
 import { useEngine } from '../engineReact/useEngine';
 import { TransportBar } from './TransportBar';
@@ -8,21 +8,24 @@ import { PatchIO } from './PatchIO';
 
 /**
  * The studio: a live engine instance against the working Patch, beside the controls.
- * Scene parameters and the modulation matrix edit the engine live; the arc can be
- * scrubbed; the Patch round-trips to JSON (brief §11).
+ * The scene selector rebuilds the engine for a chosen scene (so both structurally
+ * different scenes can be auditioned); scene parameters and the modulation matrix
+ * edit the engine live; the arc can be scrubbed; the Patch round-trips to JSON.
  */
 export function StudioView() {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [patch, setPatch] = useState<Patch | null>(null);
   const [reload, setReload] = useState(0);
-  const engine = useEngine(patch, container, patch ? 1 + reload : 0);
+  const [sceneIndex, setSceneIndex] = useState(0);
+  const [arc, setArc] = useState(0);
+  const engine = useEngine(patch, container, patch ? 1 + reload : 0, { sceneIndex, initialArc: arc });
 
   const [started, setStarted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [arc, setArc] = useState(0);
   const [tick, setTick] = useState(0);
   const [routes, setRoutes] = useState<ModulationRoute[]>([]);
+  const startedRef = useRef(false);
 
   // load the canonical patch at boot
   useEffect(() => {
@@ -36,11 +39,21 @@ export function StudioView() {
     };
   }, []);
 
-  // reset session state whenever the engine (re)builds
+  // whenever the engine (re)builds — boot, scene switch, import — resume if we were
+  // already playing (the audio context stays unlocked, so start() needs no gesture).
   useEffect(() => {
-    setStarted(false);
-    setPlaying(false);
+    if (!engine) return;
     setTick((t) => t + 1);
+    if (startedRef.current) {
+      void engine.start().then(() => {
+        setStarted(true);
+        setPlaying(true);
+        setTick((t) => t + 1); // refresh the port list now that audio has built
+      });
+    } else {
+      setStarted(false);
+      setPlaying(false);
+    }
   }, [engine]);
 
   useEffect(() => {
@@ -72,10 +85,12 @@ export function StudioView() {
     void engine
       .start()
       .then(() => {
+        startedRef.current = true;
         setStarted(true);
         setPlaying(true);
         setTick((t) => t + 1);
       })
+      .catch((err: unknown) => console.error('[borland] could not begin', err))
       .finally(() => setBusy(false));
   }, [engine, busy]);
 
@@ -98,6 +113,11 @@ export function StudioView() {
     [engine],
   );
 
+  const selectScene = useCallback((index: number) => {
+    setSceneIndex(index);
+    setReload((r) => r + 1); // rebuild the engine for the chosen scene
+  }, []);
+
   const inputs = useMemo(() => engine?.inputs() ?? [], [engine, tick]);
   const outputs = useMemo(() => engine?.outputs() ?? [], [engine, tick]);
 
@@ -111,8 +131,11 @@ export function StudioView() {
 
   const onImport = useCallback((next: Patch) => {
     setPatch(next);
+    setSceneIndex(0);
     setReload((r) => r + 1);
   }, []);
+
+  const scenes = patch?.scenes ?? [];
 
   return (
     <div className="studio">
@@ -136,6 +159,25 @@ export function StudioView() {
               onToggle={toggle}
               onArc={onArc}
             />
+            {scenes.length > 1 && (
+              <div className="row" style={{ marginTop: '0.9rem' }}>
+                <span className="ctl__name">
+                  <b>scene</b>
+                </span>
+                <select
+                  className="field"
+                  style={{ maxWidth: '14rem' }}
+                  value={sceneIndex}
+                  onChange={(e) => selectScene(Number(e.target.value))}
+                >
+                  {scenes.map((s, i) => (
+                    <option key={s.id} value={i}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </section>
 
           <section className="panel">
@@ -166,7 +208,8 @@ export function StudioView() {
             <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
           </div>
           <p className="hint" style={{ marginTop: '0.6rem' }}>
-            Drag, scroll or pinch the preview to move through the arc. Edits apply live.
+            Drag, scroll or pinch the preview to move through the arc. Edits apply live;
+            switching scene rebuilds the engine.
           </p>
         </aside>
       </div>
