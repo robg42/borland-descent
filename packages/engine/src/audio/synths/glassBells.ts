@@ -5,43 +5,31 @@ import type { SignalRegistry } from '../../core/registry';
 import type { Scalar } from '../../patch/schema';
 import { numParam, type SynthModule, type SynthOptions } from './types';
 
-const CUTOFF_MIN = 80;
-const CUTOFF_MAX = 12000;
+const CUTOFF_MIN = 300;
+const CUTOFF_MAX = 14000;
 
 /**
- * driftPad — warm, slow, polyphonic pad voices destined for the reverb bus.
- *
- * Each voice is a MonoSynth driving detuned unison saws (`fatsawtooth`) through its
- * own resonant lowpass, whose envelope opens on the attack — the breathing "bloom"
- * of an analogue poly (Juno/Prophet). The SHARED post-filter below stays the single
- * `cutoff` port: writable control-rate (zoom → cutoff) and connectable audio-rate
- * (LFO → cutoff) at once, so the modulation matrix is untouched by the richer voice.
+ * glassBells — the sunlit shallows: bright, struck-glass shimmer. FM synthesis with
+ * an inharmonic harmonicity and a fast, percussive modulation envelope, so each note
+ * rings like light on water. Structurally distinct from driftPad (filtered saw) and
+ * voidChoir (dark, slow FM); exposes the same cutoff/level ports so the global matrix
+ * routes carry across.
  */
-export function createDriftPad(opts?: SynthOptions): SynthModule {
-  const poly = new Tone.PolySynth(Tone.MonoSynth, {
-    oscillator: { type: 'fatsawtooth', count: 3, spread: 32 },
-    envelope: { attack: 1.6, decay: 1.0, sustain: 0.8, release: 5 },
-    filter: { type: 'lowpass', rolloff: -24, Q: 1.4 },
-    filterEnvelope: {
-      attack: 1.8,
-      decay: 1.6,
-      sustain: 0.5,
-      release: 4.5,
-      baseFrequency: 180,
-      octaves: 3.2,
-    },
+export function createGlassBells(opts?: SynthOptions): SynthModule {
+  const poly = new Tone.PolySynth(Tone.FMSynth, {
+    harmonicity: 3.01,
+    modulationIndex: 5,
+    oscillator: { type: 'sine' },
+    envelope: { attack: 0.006, decay: 1.4, sustain: 0.18, release: 2.8 },
+    modulation: { type: 'square' },
+    modulationEnvelope: { attack: 0.004, decay: 0.6, sustain: 0.1, release: 1.6 },
   });
   poly.maxPolyphony = Math.max(1, Math.round(opts?.maxPolyphony ?? 8));
 
-  const filter = new Tone.Filter({ frequency: 1400, type: 'lowpass', Q: 0.6 });
-  // Gentle stereo ensemble after the filter — the Juno/Cocteau width — following the
-  // per-voice chorus convention (cf. duskStrings). The stereo tape downstream now
-  // carries this width through to the master instead of folding it to mono.
-  const chorus = new Tone.Chorus({ frequency: 0.6, delayTime: 3.5, depth: 0.7, spread: 180, wet: 0.4 }).start();
-  const out = new Tone.Gain(0.8);
+  const filter = new Tone.Filter({ frequency: 3200, type: 'lowpass', Q: 0.8 });
+  const out = new Tone.Gain(0.7);
   poly.connect(filter);
-  filter.connect(chorus);
-  chorus.connect(out);
+  filter.connect(out);
 
   return {
     output: out,
@@ -49,7 +37,7 @@ export function createDriftPad(opts?: SynthOptions): SynthModule {
       poly.triggerAttackRelease(midiToFreq(midi), durationSec, time, clamp(velocity, 0, 1));
     },
     registerPorts(nodeId, registry: SignalRegistry, params: Record<string, Scalar>) {
-      const baseCutoff = clamp(numParam(params, 'cutoff', 1400), CUTOFF_MIN, CUTOFF_MAX);
+      const baseCutoff = clamp(numParam(params, 'cutoff', 3200), CUTOFF_MIN, CUTOFF_MAX);
       filter.frequency.value = baseCutoff;
       registry.addInput(makePortRef(nodeId, 'cutoff'), {
         kind: 'scalar',
@@ -62,7 +50,7 @@ export function createDriftPad(opts?: SynthOptions): SynthModule {
         audioTarget: filter.frequency,
       });
 
-      const baseLevel = numParam(params, 'level', 0.8);
+      const baseLevel = numParam(params, 'level', 0.7);
       out.gain.value = baseLevel;
       registry.addInput(makePortRef(nodeId, 'level'), {
         kind: 'unipolar',
@@ -86,7 +74,6 @@ export function createDriftPad(opts?: SynthOptions): SynthModule {
     dispose() {
       poly.dispose();
       filter.dispose();
-      chorus.dispose();
       out.dispose();
     },
   };

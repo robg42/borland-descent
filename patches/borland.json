@@ -4,7 +4,7 @@
     "name": "Borland — Surface",
     "version": 1,
     "createdAt": "2026-06-06T00:00:00.000Z",
-    "updatedAt": "2026-06-06T00:00:00.000Z",
+    "updatedAt": "2026-06-08T00:00:00.000Z",
     "seed": 20260606
   },
   "dna": {
@@ -29,6 +29,28 @@
         }
       },
       {
+        "position": 0.16,
+        "macros": {
+          "darkness": 0.27,
+          "rhythmicWeight": 0.3,
+          "reverbSize": 0.8,
+          "filterPosition": 0.6,
+          "dissonance": 0.14,
+          "density": 0.38
+        }
+      },
+      {
+        "position": 0.33,
+        "macros": {
+          "darkness": 0.42,
+          "rhythmicWeight": 0.42,
+          "reverbSize": 0.83,
+          "filterPosition": 0.51,
+          "dissonance": 0.24,
+          "density": 0.45
+        }
+      },
+      {
         "position": 0.5,
         "macros": {
           "darkness": 0.55,
@@ -37,6 +59,28 @@
           "filterPosition": 0.45,
           "dissonance": 0.35,
           "density": 0.5
+        }
+      },
+      {
+        "position": 0.67,
+        "macros": {
+          "darkness": 0.7,
+          "rhythmicWeight": 0.62,
+          "reverbSize": 0.87,
+          "filterPosition": 0.39,
+          "dissonance": 0.46,
+          "density": 0.59
+        }
+      },
+      {
+        "position": 0.84,
+        "macros": {
+          "darkness": 0.84,
+          "rhythmicWeight": 0.74,
+          "reverbSize": 0.89,
+          "filterPosition": 0.32,
+          "dissonance": 0.56,
+          "density": 0.67
         }
       },
       {
@@ -56,7 +100,7 @@
     {
       "id": "surface",
       "name": "Surface",
-      "arcRange": [0, 0.5],
+      "arcRange": [0, 0.16],
       "synthModuleId": "driftPad",
       "shaderModuleId": "oceanicField",
       "audioParams": {
@@ -77,9 +121,124 @@
       "transition": { "kind": "crossfade", "durationSec": 6, "revealNextEdges": true }
     },
     {
+      "id": "sunlitShallows",
+      "name": "Sunlit Shallows",
+      "arcRange": [0.16, 0.32],
+      "synthModuleId": "glassBells",
+      "shaderModuleId": "sunlitShallows",
+      "audioParams": {
+        "scale": [0, 2, 4, 5, 7, 9, 11],
+        "harmonicGuardrails": { "allowedIntervals": [0, 4, 5, 7, 9, 12], "maxDissonance": 0.4 },
+        "density": 0.42,
+        "rhythm": { "subdivision": 8, "minGapSteps": 1, "maxVoicesPerBar": 8 },
+        "bass": { "enabled": true, "register": 38, "anchorPc": 0 },
+        "reverbSize": 0.78,
+        "voices": { "maxPolyphony": 8 }
+      },
+      "visualParams": {},
+      "gestureMap": [
+        { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
+        { "gesture": "touchX", "output": "gesture.touchX" },
+        { "gesture": "touchY", "output": "gesture.touchY" }
+      ],
+      "transition": { "kind": "crossfade", "durationSec": 6, "revealNextEdges": true }
+    },
+    {
+      "id": "thermocline",
+      "name": "Thermocline",
+      "arcRange": [0.32, 0.46],
+      "synthModuleId": "refractPad",
+      "shaderModuleId": "thermocline",
+      "audioParams": {
+        "scale": [0, 2, 4, 5, 7, 9, 10],
+        "harmonicGuardrails": { "allowedIntervals": [0, 4, 5, 7, 10, 12], "maxDissonance": 0.5 },
+        "density": 0.46,
+        "rhythm": { "subdivision": 8, "minGapSteps": 2, "maxVoicesPerBar": 7 },
+        "bass": { "enabled": true, "register": 36, "anchorPc": 0 },
+        "reverbSize": 0.82,
+        "voices": { "maxPolyphony": 8 }
+      },
+      "visualParams": {},
+      "gestureMap": [
+        { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
+        { "gesture": "touchX", "output": "gesture.touchX" },
+        { "gesture": "touchY", "output": "gesture.touchY" }
+      ],
+      "transition": { "kind": "crossfade", "durationSec": 6, "revealNextEdges": true }
+    },
+    {
+      "id": "twilight",
+      "name": "Twilight",
+      "arcRange": [0.46, 0.6],
+      "synthModuleId": "duskStrings",
+      "shaderModuleId": "twilightZone",
+      "audioParams": {
+        "scale": [0, 2, 3, 5, 7, 8, 10],
+        "harmonicGuardrails": { "allowedIntervals": [0, 3, 5, 7, 8, 12], "maxDissonance": 0.55 },
+        "density": 0.5,
+        "rhythm": { "subdivision": 8, "minGapSteps": 2, "maxVoicesPerBar": 6 },
+        "bass": { "enabled": true, "register": 34, "anchorPc": 0 },
+        "reverbSize": 0.86,
+        "voices": { "maxPolyphony": 8 }
+      },
+      "visualParams": {},
+      "gestureMap": [
+        { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
+        { "gesture": "touchX", "output": "gesture.touchX" },
+        { "gesture": "touchY", "output": "gesture.touchY" }
+      ],
+      "transition": { "kind": "crossfade", "durationSec": 7, "revealNextEdges": true }
+    },
+    {
+      "id": "midnight",
+      "name": "Midnight",
+      "arcRange": [0.6, 0.74],
+      "synthModuleId": "pressureDrone",
+      "shaderModuleId": "midnightZone",
+      "audioParams": {
+        "scale": [0, 1, 3, 5, 7, 8, 10],
+        "harmonicGuardrails": { "allowedIntervals": [0, 1, 3, 5, 7, 8, 12], "maxDissonance": 0.65 },
+        "density": 0.58,
+        "rhythm": { "subdivision": 8, "minGapSteps": 2, "maxVoicesPerBar": 6 },
+        "bass": { "enabled": true, "register": 31, "anchorPc": 0 },
+        "reverbSize": 0.88,
+        "voices": { "maxPolyphony": 7 }
+      },
+      "visualParams": {},
+      "gestureMap": [
+        { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
+        { "gesture": "touchX", "output": "gesture.touchX" },
+        { "gesture": "touchY", "output": "gesture.touchY" }
+      ],
+      "transition": { "kind": "crossfade", "durationSec": 7, "revealNextEdges": false }
+    },
+    {
+      "id": "abyssal",
+      "name": "Abyssal",
+      "arcRange": [0.74, 0.88],
+      "synthModuleId": "leviathan",
+      "shaderModuleId": "abyssalPlain",
+      "audioParams": {
+        "scale": [0, 1, 3, 5, 6, 8, 10],
+        "harmonicGuardrails": { "allowedIntervals": [0, 1, 3, 5, 6, 7, 12], "maxDissonance": 0.72 },
+        "density": 0.64,
+        "rhythm": { "subdivision": 8, "minGapSteps": 3, "maxVoicesPerBar": 5 },
+        "bass": { "enabled": true, "register": 28, "anchorPc": 0 },
+        "reverbSize": 0.9,
+        "voices": { "maxPolyphony": 6 }
+      },
+      "visualParams": {},
+      "gestureMap": [
+        { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
+        { "gesture": "touchX", "output": "gesture.touchX" },
+        { "gesture": "touchY", "output": "gesture.touchY" }
+      ],
+      "transition": { "kind": "crossfade", "durationSec": 8, "revealNextEdges": false }
+    },
+    {
       "id": "descent",
       "name": "Descent",
-      "arcRange": [0.5, 1],
+      "arcRange": [0.88, 1],
       "synthModuleId": "voidChoir",
       "shaderModuleId": "abyss",
       "audioParams": {
@@ -104,6 +263,7 @@
     "nodes": [
       { "id": "composer", "kind": "composer", "moduleId": "dnaComposer", "params": {} },
       { "id": "voices", "kind": "synthModule", "moduleId": "driftPad", "params": { "cutoff": 1400, "detune": 6, "level": 0.8 } },
+      { "id": "drift", "kind": "effect", "moduleId": "pitchDrift", "params": { "frequency": 0.13, "depth": 0.22, "maxDelay": 0.02 } },
       { "id": "bass", "kind": "synthModule", "moduleId": "subBass", "params": { "level": 0.9 } },
       { "id": "dryBus", "kind": "bus", "params": { "gain": 0.95 } },
       { "id": "wetBus", "kind": "bus", "params": { "gain": 0.85 } },
@@ -116,7 +276,8 @@
       { "id": "wobble", "kind": "lfo", "params": { "frequency": 0.1, "min": -220, "max": 220 } }
     ],
     "connections": [
-      { "from": "voices", "to": "wetBus" },
+      { "from": "voices", "to": "drift" },
+      { "from": "drift", "to": "wetBus" },
       { "from": "wetBus", "to": "reverb" },
       { "from": "reverb", "to": "tape" },
       { "from": "tape", "to": "master" },

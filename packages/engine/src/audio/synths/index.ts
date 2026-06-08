@@ -1,6 +1,11 @@
 import { createDriftPad } from './driftPad';
 import { createSubBass } from './subBass';
 import { createVoidChoir } from './voidChoir';
+import { createGlassBells } from './glassBells';
+import { createRefractPad } from './refractPad';
+import { createDuskStrings } from './duskStrings';
+import { createPressureDrone } from './pressureDrone';
+import { createLeviathan } from './leviathan';
 import type { SynthFactory, SynthModule, SynthOptions } from './types';
 
 /** Registry of synth modules by id. Scenes select their voices/bass by these keys. */
@@ -8,6 +13,11 @@ const FACTORIES: Record<string, SynthFactory> = {
   driftPad: createDriftPad,
   subBass: createSubBass,
   voidChoir: createVoidChoir,
+  glassBells: createGlassBells,
+  refractPad: createRefractPad,
+  duskStrings: createDuskStrings,
+  pressureDrone: createPressureDrone,
+  leviathan: createLeviathan,
 };
 
 export function createSynth(moduleId: string, opts?: SynthOptions): SynthModule {

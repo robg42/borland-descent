@@ -33,6 +33,7 @@ export class AudioEngine {
   private reverb: Tone.Reverb | null = null;
   private tape: TapeWarmth | null = null;
   private lfo: Tone.LFO | null = null;
+  private drift: Tone.Vibrato | null = null;
   private disposed = false;
 
   constructor(
@@ -60,8 +61,20 @@ export class AudioEngine {
       this.tape = null;
     }
 
-    // Wet chain: pad → wetBus → reverb → [tape] → master
-    this.pad.output.connect(this.wetBus);
+    // Slow pitch DRIFT on the voices — the Boards-of-Canada warped-tape instability: a
+    // gentle, sub-Hz pitch wander over the whole wet/pad bus. The dry bass bypasses it
+    // and stays tight. Sits before the reverb so the tail follows the drift.
+    const driftParams = nodeParams(this.patch, 'drift');
+    this.drift = new Tone.Vibrato({
+      frequency: num(driftParams.frequency, 0.13),
+      depth: num(driftParams.depth, 0.22),
+      maxDelay: num(driftParams.maxDelay, 0.02),
+      type: 'sine',
+    });
+
+    // Wet chain: pad → drift → wetBus → reverb → [tape] → master
+    this.pad.output.connect(this.drift);
+    this.drift.connect(this.wetBus);
     this.wetBus.connect(this.reverb);
     if (this.tape) {
       this.reverb.connect(this.tape.input);
@@ -129,6 +142,20 @@ export class AudioEngine {
       read: () => this.analysers.readBand(0.5, 1),
     });
 
+    if (this.drift) {
+      const drift = this.drift;
+      this.registry.addInput(makePortRef('drift', 'depth'), {
+        kind: 'unipolar',
+        base: drift.depth.value,
+        min: 0,
+        max: 1,
+        write: (v) => {
+          drift.depth.value = clamp(v, 0, 1);
+        },
+        audioTarget: drift.depth,
+      });
+    }
+
     if (this.lfo) {
       this.registry.addOutput(makePortRef('wobble', 'out'), {
         kind: 'bipolar',
@@ -161,6 +188,7 @@ export class AudioEngine {
     this.pad.dispose();
     this.bass.dispose();
     this.tape?.dispose();
+    this.drift?.dispose();
     this.reverb?.dispose();
     this.wetBus.dispose();
     this.dryBus.dispose();

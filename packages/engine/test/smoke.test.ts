@@ -21,12 +21,25 @@ const CURVES: CurveKind[] = ['linear', 'exp', 'log', 'sCurve', 'invert'];
 describe('headless smoke — pure-logic boot', () => {
   const patch = validatePatch(borland);
 
-  it('the seed patch has at least two structurally different scenes', () => {
+  it('the seed patch has a multi-scene arc of structurally different scenes', () => {
     expect(patch.scenes.length).toBeGreaterThanOrEqual(2);
+    // every scene selects a distinct synth + shader MODULE — the descent is built from
+    // structurally different worlds, not parameter variations of one.
     const synths = new Set(patch.scenes.map((s) => s.synthModuleId));
     const shaders = new Set(patch.scenes.map((s) => s.shaderModuleId));
-    expect(synths.size).toBeGreaterThanOrEqual(2);
-    expect(shaders.size).toBeGreaterThanOrEqual(2);
+    expect(synths.size).toBe(patch.scenes.length);
+    expect(shaders.size).toBe(patch.scenes.length);
+  });
+
+  it('the scenes tile the arc [0,1] contiguously, in order', () => {
+    const ranges = patch.scenes.map((s) => s.arcRange);
+    expect(ranges[0]?.[0]).toBe(0);
+    expect(ranges[ranges.length - 1]?.[1]).toBe(1);
+    for (let i = 0; i < ranges.length; i++) {
+      const [lo, hi] = ranges[i]!;
+      expect(hi).toBeGreaterThan(lo); // each scene occupies a non-empty slice
+      if (i > 0) expect(lo).toBeCloseTo(ranges[i - 1]![1], 6); // no gaps or overlaps
+    }
   });
 
   it('the composer runs for every scene without throwing, yielding finite in-range notes', () => {

@@ -528,8 +528,8 @@
 
       <h3><span class="h3-mark">→</span>What it deliberately is <em>not</em></h3>
       <p>
-        There is no backend, no auth, no scene-to-scene transitions, and not yet the full
-        seven-scene arc. This is not an oversight to apologise for — it is the plan. The
+        There is no backend, no auth, and no automatic scene-to-scene transitions yet. This
+        is not an oversight to apologise for — it is the plan. The
         riskiest, most defining question for a project like this is <em>“does the creative loop
         actually feel good to work in?”</em> Everything else (accounts, hosting, sharing) is
         comparatively well-understood plumbing. So v1 spends its complexity budget entirely on
@@ -764,8 +764,8 @@
           <div class="ledger__seam">The Patch schema <b>already models a <code>SceneTransition</code></b> (crossfade / morph / none, with duration), and the runtime now has the unit it needs: the engine hosts a self-contained <b><code>SceneInstance</code></b>. A crossfade becomes the host holding a second instance and ramping a blend — not a re-plumb.</div>
         </div>
         <div class="ledger__row">
-          <div class="ledger__what">The full seven-scene arc <span class="tag-defer">deferred</span></div>
-          <div class="ledger__seam">Scenes already declare an <b><code>arcRange</code></b> slice of 0..1, and the arc is keyframed continuously. Going from two scenes to seven is more authored content, not a structural change.</div>
+          <div class="ledger__what">Continuous handoff across the seven-scene arc <span class="tag-defer">deferred</span></div>
+          <div class="ledger__seam">The seven scenes are now <b>authored</b> — each a distinct synth + shader module tiling its <b><code>arcRange</code></b> slice from surface to trench, any one auditioned live in the studio. Going from two to seven was just authored content, exactly as planned. What remains is the engine <em>handing off</em> from one scene to the next as you scrub — the same <code>SceneInstance</code> seam as transitions above.</div>
         </div>
         <div class="ledger__row">
           <div class="ledger__what">Accounts, hosting, sharing <span class="tag-defer">deferred</span></div>
@@ -778,15 +778,35 @@
     <!-- 07 -->
     <section class="chapter reveal" id="piece" data-accent="#897cef" style="--accent:#897cef">
       <div class="chapter__head"><span class="chapter__num">07</span><h2>The piece as it stands</h2></div>
-      <p>To make the abstractions concrete: the canonical patch committed today is <strong>“Borland — Surface”</strong> (seed <code>20260606</code>, tempo 54–66&nbsp;bpm), a continuous descent across two structurally different scenes mapped to the lower and upper halves of the arc.</p>
+      <p>To make the abstractions concrete: the canonical patch committed today is <strong>“Borland — Surface”</strong> (seed <code>20260606</code>, tempo 54–66&nbsp;bpm), a continuous descent across <strong>seven</strong> structurally different scenes — each its own synth <em>and</em> shader module — tiling the arc from the lit surface down to the abyssal trench.</p>
 
       <div class="scenes">
         <div class="scene scene--s">
-          <h4>Surface</h4><span class="arc">arc 0.0 – 0.5</span>
+          <h4>Surface</h4><span class="arc">arc 0.00 – 0.16</span>
           <dl><dt>Synth</dt><dd><code>driftPad</code></dd><dt>Shader</dt><dd><code>oceanicField</code></dd><dt>Feel</dt><dd>luminous, open, slow</dd></dl>
         </div>
+        <div class="scene scene--s">
+          <h4>Sunlit Shallows</h4><span class="arc">arc 0.16 – 0.32</span>
+          <dl><dt>Synth</dt><dd><code>glassBells</code></dd><dt>Shader</dt><dd><code>sunlitShallows</code></dd><dt>Feel</dt><dd>bright, caustic, alive</dd></dl>
+        </div>
+        <div class="scene scene--s">
+          <h4>Thermocline</h4><span class="arc">arc 0.32 – 0.46</span>
+          <dl><dt>Synth</dt><dd><code>refractPad</code></dd><dt>Shader</dt><dd><code>thermocline</code></dd><dt>Feel</dt><dd>shimmering boundary</dd></dl>
+        </div>
         <div class="scene scene--d">
-          <h4>Descent</h4><span class="arc">arc 0.5 – 1.0</span>
+          <h4>Twilight</h4><span class="arc">arc 0.46 – 0.60</span>
+          <dl><dt>Synth</dt><dd><code>duskStrings</code></dd><dt>Shader</dt><dd><code>twilightZone</code></dd><dt>Feel</dt><dd>fading, bowed, drifting</dd></dl>
+        </div>
+        <div class="scene scene--d">
+          <h4>Midnight</h4><span class="arc">arc 0.60 – 0.74</span>
+          <dl><dt>Synth</dt><dd><code>pressureDrone</code></dd><dt>Shader</dt><dd><code>midnightZone</code></dd><dt>Feel</dt><dd>aphotic, pressing, sparse</dd></dl>
+        </div>
+        <div class="scene scene--d">
+          <h4>Abyssal</h4><span class="arc">arc 0.74 – 0.88</span>
+          <dl><dt>Synth</dt><dd><code>leviathan</code></dd><dt>Shader</dt><dd><code>abyssalPlain</code></dd><dt>Feel</dt><dd>vast, immense, still</dd></dl>
+        </div>
+        <div class="scene scene--d">
+          <h4>Descent</h4><span class="arc">arc 0.88 – 1.00</span>
           <dl><dt>Synth</dt><dd><code>voidChoir</code></dd><dt>Shader</dt><dd><code>abyss</code></dd><dt>Feel</dt><dd>darker, denser, dissonant</dd></dl>
         </div>
       </div>

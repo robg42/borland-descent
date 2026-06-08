@@ -8,8 +8,10 @@ const PROCESSOR = 'tape-warmth';
 let moduleRegistered = false;
 
 /**
- * Tone wrapper around the tape-warmth AudioWorklet. Sits on the wet bus between the
- * reverb and the master. Exposes drive / hfCutoff / flutterDepth as modulatable
+ * Tone wrapper around the tape-warmth AudioWorklet. Runs in TRUE STEREO — L/R wow &
+ * flutter are decorrelated, so the wet bus keeps its width through the tape (without
+ * this the whole wet path collapses to mono). Sits on the wet bus between the reverb
+ * and the master. Exposes drive / hfCutoff / flutterDepth as modulatable
  * ports (the worklet's AudioParams are both control-writable and audio-rate
  * connectable). If the worklet module fails to load, the audio engine routes around
  * it — the experience still runs (brief: don't rabbit-hole on the worklet).
@@ -36,7 +38,10 @@ export class TapeWarmth {
     this.node = Tone.getContext().createAudioWorkletNode(PROCESSOR, {
       numberOfInputs: 1,
       numberOfOutputs: 1,
-      channelCount: 1,
+      outputChannelCount: [2],
+      channelCount: 2,
+      channelCountMode: 'explicit',
+      channelInterpretation: 'speakers',
     });
     Tone.connect(this.input, this.node);
     Tone.connect(this.node, this.output);
