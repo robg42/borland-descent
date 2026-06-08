@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="en-GB" class="no-js">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#05080b" />
+<title>Borland Descent — Design Rationale</title>
+<meta name="description" content="Why Borland Descent v1 is built the way it is — the decisions, the trade-offs, and the seams. A descent for review." />
+<script>document.documentElement.className = 'js';</script>
+<style>
+  /* ============================================================ TOKENS === */
+  :root {
+    /* the water column — surface light at the top, abyss at the foot */
+    --abyss-0:#0b141a;
+    --abyss-1:#070e13;
+    --abyss-2:#04080b;
+    --ink:      #e6edf1;
+    --ink-soft: #aab6bf;
+    --ink-faint:#69757f;
+    --hair:        rgba(120,158,168,0.16);
+    --hair-strong: rgba(120,158,168,0.30);
+    --teal:   #5fe0cf;   /* bioluminescence, the surface */
+    --indigo: #8f78ef;   /* the pressure of the deep */
+    --amber:  #e3b067;   /* a warning light on the panel */
+    --accent: var(--teal);          /* re-tinted per chapter as you descend */
+    --panel:   rgba(255,255,255,0.022);
+    --panel-2: rgba(255,255,255,0.045);
+
+    /* type — a high-contrast didone for display, a humanist oldstyle for
+       reading, a monospace for the instrument panel. Drawn from the platform
+       so the file stays self-contained; graceful fallbacks everywhere. */
+    --display:"Didot","Bodoni 72","Bodoni MT","Hoefler Text","Playfair Display",Garamond,"Times New Roman",serif;
+    --body:"Iowan Old Style","Palatino Linotype",Palatino,Charter,Constantia,Cambria,Georgia,serif;
+    --mono:"SF Mono",SFMono-Regular,"Cascadia Code",Menlo,Consolas,"Liberation Mono",monospace;
+
+    --gauge-w: 196px;
+    --pad-x: clamp(22px, 5vw, 64px);
+    --measure: 66ch;
+    --ease: cubic-bezier(.2,.7,.2,1);
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--abyss-2); scroll-behavior: auto; -webkit-text-size-adjust: 100%; }
+  @media (prefers-reduced-motion: no-preference) {
+    html.js { scroll-behavior: smooth; }
+  }
+
+  body {
+    margin: 0;
+    min-height: 100%;
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 18px;
+    line-height: 1.72;
+    font-feature-settings: "liga" 1, "onum" 1, "kern" 1;
+    background:
+      radial-gradient(120% 60% at 50% -8%, rgba(95,224,207,0.10), transparent 60%),
+      linear-gradient(180deg, var(--abyss-0) 0%, var(--abyss-1) 38%, var(--abyss-2) 100%);
+    background-attachment: scroll;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: var(--teal); color: #042019; }
+  ::-webkit-scrollbar { width: 11px; }
+  ::-webkit-scrollbar-track { background: var(--abyss-2); }
+  ::-webkit-scrollbar-thumb { background: #1b2a31; border-radius: 8px; border: 3px solid var(--abyss-2); }
+  ::-webkit-scrollbar-thumb:hover { background: #283b44; }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  strong { color: #f3f7fa; font-weight: 600; }
+  em { color: #f1f5f8; }
+  code, kbd {
+    font-family: var(--mono);
+    font-size: 0.82em;
+    background: rgba(95,224,207,0.07);
+    border: 1px solid var(--hair);
+    border-radius: 5px;
+    padding: 0.06em 0.4em;
+    color: #cbe6df;
+    white-space: nowrap;
+  }
+
+  /* grain + fixed atmospherics, painted above the gradient, below content */
+  .atmos {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  }
+  .atmos::before {
+    content:""; position:absolute; inset:0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity:0.05; mix-blend-mode: overlay;
+  }
+  .atmos::after { /* deep vignette */
+    content:""; position:absolute; inset:0;
+    background: radial-gradient(130% 80% at 50% 120%, rgba(0,0,0,0.55), transparent 60%);
+  }
+
+  /* top scroll-progress hairline (all viewports) */
+  .progress {
+    position: fixed; top: 0; left: 0; height: 2px; width: 0%;
+    background: linear-gradient(90deg, var(--teal), var(--indigo));
+    z-index: 60; transition: width .12s linear;
+    box-shadow: 0 0 12px rgba(95,224,207,0.5);
+  }
+
+  /* =================================================== DEPTH GAUGE / NAV === */
+  .gauge {
+    position: fixed; z-index: 40;
+    left: var(--pad-x); top: 50%; transform: translateY(-50%);
+    width: var(--gauge-w);
+    font-family: var(--mono);
+  }
+  .gauge__readout {
+    display: block;
+    font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink-faint); margin-bottom: 1.1rem; padding-left: 1.15rem;
+  }
+  .gauge__readout b { color: var(--accent); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .gauge__readout .zone { color: var(--ink-soft); }
+  .gauge__rail { position: relative; }
+  .gauge__rail::before { /* the line */
+    content:""; position:absolute; left: 0; top: 4px; bottom: 4px; width: 1px;
+    background: linear-gradient(180deg, var(--teal), var(--indigo));
+    opacity: 0.45;
+  }
+  .gauge__indicator {
+    position: absolute; left: -2px; top: 0; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent); transform: translateY(-2px);
+    box-shadow: 0 0 0 3px rgba(95,224,207,0.16), 0 0 12px 2px var(--accent);
+    transition: top .12s linear, background .5s var(--ease), box-shadow .5s var(--ease);
+  }
+  .gauge ol { list-style: none; margin: 0; padding: 0; }
+  .gauge li { position: relative; }
+  .gauge a {
+    display: flex; align-items: baseline; gap: 0.6rem;
+    padding: 0.46rem 0 0.46rem 1.15rem;
+    color: var(--ink-faint);
+    font-size: 0.72rem; line-height: 1.25;
+    transition: color .2s var(--ease);
+  }
+  .gauge a .gi { color: rgba(120,158,168,0.5); font-size: 0.64rem; font-variant-numeric: tabular-nums; }
+  .gauge a:hover { color: var(--ink); text-decoration: none; }
+  .gauge a.is-active { color: var(--accent); }
+  .gauge a.is-active .gi { color: var(--accent); }
+  .gauge a::before { /* per-item tick on the rail */
+    content:""; position:absolute; left:-1px; top: 50%; width: 9px; height: 1px;
+    background: var(--hair-strong); transform: translateY(-50%) scaleX(1);
+    transform-origin: left; transition: background .2s, width .2s;
+  }
+  .gauge a:hover::before { background: var(--ink-soft); width: 13px; }
+  .gauge a.is-active::before { background: var(--accent); width: 15px; }
+
+  /* ============================================================ SHELL ===== */
+  .shell { position: relative; z-index: 1; padding: 0 var(--pad-x); }
+  @media (min-width: 1040px) {
+    .shell { padding-left: calc(var(--gauge-w) + var(--pad-x) + 56px); }
+  }
+  .col { max-width: var(--measure); }
+  .wide { max-width: 860px; }
+
+  /* ============================================================ MASTHEAD == */
+  .masthead {
+    position: relative;
+    min-height: 92vh;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 14vh 0 12vh;
+  }
+  .masthead__coord {
+    position: absolute; top: 7vh; right: 0;
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.18em;
+    color: var(--ink-faint); text-transform: uppercase; text-align: right;
+  }
+  .masthead__coord b { color: var(--teal); font-weight: 500; display:block; font-size: 1.5rem; letter-spacing: 0.02em; margin-top: .2rem; }
+  .kicker {
+    font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.34em;
+    text-transform: uppercase; color: var(--teal); margin: 0 0 1.7rem;
+    display: flex; align-items: center; gap: 0.9rem;
+  }
+  .kicker::after { content:""; height:1px; width: clamp(40px,12vw,150px); background: linear-gradient(90deg,var(--teal),transparent); }
+  .masthead h1 {
+    font-family: var(--display); font-weight: 400;
+    font-size: clamp(3rem, 10.5vw, 8rem);
+    line-height: 0.96; letter-spacing: -0.018em;
+    margin: 0; color: #f4f8fb;
+    text-wrap: balance;
+  }
+  .masthead h1 .lo { display:block; font-style: italic; color: var(--ink-soft); font-size: 0.62em; letter-spacing: -0.01em; margin-top: 0.12em; }
+  .masthead__standfirst {
+    font-size: clamp(1.15rem, 2.5vw, 1.5rem);
+    line-height: 1.5; color: var(--ink-soft);
+    max-width: 40ch; margin: 2.4rem 0 0;
+  }
+  .masthead__standfirst b { color: var(--ink); font-weight: 600; }
+  .masthead__meta {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 14rem));
+    gap: 0.4rem 2.5rem; margin-top: 3rem;
+    font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.03em;
+    color: var(--ink-faint);
+  }
+  .masthead__meta div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.5rem 0; border-top: 1px solid var(--hair); }
+  .masthead__meta b { color: var(--ink-soft); font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.66rem; }
+  .masthead__cue {
+    position: absolute; bottom: 6vh; left: 0;
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-faint); display: flex; align-items: center; gap: 0.7rem;
+  }
+  .masthead__cue .arrow { display:inline-block; }
+
+  /* ============================================================ PROSE ===== */
+  main { position: relative; z-index: 1; padding-bottom: 8rem; }
+  .chapter { padding: clamp(3rem,8vw,6rem) 0; border-top: 1px solid var(--hair); scroll-margin-top: 2rem; }
+  .chapter__head { display: flex; align-items: baseline; gap: clamp(1rem,3vw,2rem); margin-bottom: 2rem; }
+  .chapter__num {
+    font-family: var(--display); font-size: clamp(2.6rem,7vw,4.6rem); line-height: 0.8;
+    color: transparent; -webkit-text-stroke: 1px var(--accent); text-stroke: 1px var(--accent);
+    opacity: 0.85; font-feature-settings: "lnum" 1; flex: none;
+  }
+  .chapter h2 {
+    font-family: var(--display); font-weight: 400;
+    font-size: clamp(1.9rem, 5vw, 3.1rem); line-height: 1.04; letter-spacing: -0.012em;
+    margin: 0; color: #f3f7fa; text-wrap: balance;
+  }
+  .lead {
+    font-size: clamp(1.2rem, 2.4vw, 1.5rem); line-height: 1.46; color: var(--ink);
+    max-width: 38ch; margin: 0 0 1.8rem; font-style: italic; color: var(--ink-soft);
+  }
+  .chapter p { margin: 0 0 1.2rem; max-width: var(--measure); }
+  .drop::first-letter {
+    font-family: var(--display); float: left; font-size: 4.2em; line-height: 0.74;
+    padding: 0.06em 0.12em 0 0; color: var(--accent); font-weight: 400;
+  }
+  h3 {
+    font-family: var(--body); font-weight: 600;
+    font-size: 1.28rem; line-height: 1.25; letter-spacing: 0.005em;
+    margin: 2.6rem 0 0.7rem; color: #eef3f6;
+  }
+  h3 .h3-mark { color: var(--accent); font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.1em; margin-right: 0.6rem; vertical-align: 0.18em; }
+
+  ul.body { list-style: none; padding: 0; margin: 0 0 1.2rem; max-width: var(--measure); }
+  ul.body > li { position: relative; padding-left: 1.6rem; margin-bottom: 0.6rem; }
+  ul.body > li::before {
+    content:""; position: absolute; left: 0.15rem; top: 0.78em;
+    width: 6px; height: 6px; background: var(--accent); transform: rotate(45deg);
+  }
+
+  /* "in one minute" — the manifest */
+  .manifest {
+    margin: 2rem 0 0; border-top: 1px solid var(--hair-strong);
+    padding-top: 2.2rem;
+  }
+  .manifest__label {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--teal); margin: 0 0 1.6rem;
+  }
+  .manifest ol { list-style: none; counter-reset: m; margin: 0; padding: 0; display: grid; gap: 1.4rem; }
+  .manifest li { counter-increment: m; display: grid; grid-template-columns: 2.6rem 1fr; gap: 1rem; align-items: start; max-width: 60ch; }
+  .manifest li::before {
+    content: counter(m,decimal-leading-zero);
+    font-family: var(--display); font-size: 1.5rem; color: var(--accent);
+    line-height: 1; font-variant-numeric: lining-nums;
+  }
+  .manifest li b { color: #f3f7fa; font-weight: 600; }
+  .manifest li span { color: var(--ink-soft); }
+
+  /* pull quote */
+  .pull {
+    font-family: var(--display); font-weight: 400; font-style: italic;
+    font-size: clamp(1.7rem, 4.2vw, 2.7rem); line-height: 1.18; letter-spacing: -0.01em;
+    color: #eef3f6; max-width: 22ch; margin: 2.6rem 0;
+    padding-left: 1.4rem; border-left: 2px solid var(--accent);
+  }
+
+  /* ============================================ DECISION / SPECIMEN CARDS = */
+  .card {
+    position: relative; margin: 1.6rem 0; padding: 1.6rem 1.7rem;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--hair);
+    border-top: 1px solid var(--hair-strong);
+    border-radius: 3px; max-width: 860px;
+    transition: border-color .3s var(--ease), transform .3s var(--ease);
+  }
+  .card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background: var(--accent); opacity:0.7; }
+  .card:hover { border-color: var(--hair-strong); transform: translateX(2px); }
+  .card__rule { display: flex; align-items: baseline; gap: 0.9rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .chip {
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--accent); border: 1px solid currentColor; border-radius: 2px;
+    padding: 0.22rem 0.55rem; opacity: 0.9; flex: none;
+  }
+  .card__rule h3 { font-family: var(--display); font-weight: 400; font-size: 1.5rem; margin: 0; color: #f4f8fb; }
+  .card > p { color: var(--ink-soft); }
+  .card dl { margin: 0.6rem 0 0; }
+  .card dt {
+    font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-faint); margin-top: 1rem; padding-top: 0.7rem; border-top: 1px dashed var(--hair);
+  }
+  .card dd { margin: 0.35rem 0 0; color: var(--ink-soft); }
+  .card dd strong { color: var(--ink); }
+
+  /* control / audio split */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin: 1.2rem 0; }
+  .split > div { border: 1px solid var(--hair); border-radius: 3px; padding: 1rem 1.1rem; background: var(--panel); }
+  .split h4 { margin: 0 0 0.5rem; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; }
+  .split--c h4 { color: var(--teal); }
+  .split--a h4 { color: var(--indigo); }
+  .split p { font-size: 0.92rem; color: var(--ink-soft); margin: 0; max-width: none; }
+  .split code { white-space: normal; }
+
+  /* invariant / contract block */
+  pre.inv {
+    font-family: var(--mono); font-size: 0.8rem; line-height: 1.65;
+    background: rgba(4,8,11,0.6); border: 1px solid var(--hair); border-left: 2px solid var(--accent);
+    border-radius: 3px; padding: 1.1rem 1.3rem; overflow-x: auto; margin: 1.4rem 0;
+    color: #c2d2cd; max-width: 860px;
+  }
+  pre.inv .c { color: var(--ink-faint); }
+  pre.inv .k { color: var(--indigo); }
+  pre.inv .s { color: var(--teal); }
+
+  /* ============================================== ARCHITECTURE SCHEMATIC == */
+  .schematic {
+    border: 1px solid var(--hair); border-radius: 4px; margin: 1.8rem 0; max-width: 860px;
+    background: linear-gradient(180deg, rgba(95,224,207,0.03), transparent 30%), var(--panel);
+    padding: 1.8rem 1.5rem;
+  }
+  .stratum { display: grid; gap: 0.5rem; text-align: center; }
+  .node { border: 1px solid var(--hair); background: rgba(4,8,11,0.4); border-radius: 3px; padding: 0.85rem 1rem; }
+  .node--row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; background: none; border: 0; padding: 0; }
+  .node--core { border-color: rgba(95,224,207,0.5); background: rgba(95,224,207,0.05); box-shadow: 0 0 24px -8px rgba(95,224,207,0.4); }
+  .node__name { font-family: var(--mono); font-size: 0.84rem; color: var(--ink); letter-spacing: 0.02em; }
+  .node--core .node__name { color: var(--teal); }
+  .node__sub { font-size: 0.74rem; color: var(--ink-faint); margin-top: 0.2rem; font-family: var(--mono); }
+  .cells { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; margin-top: 0.7rem; }
+  .cell { font-family: var(--mono); font-size: 0.66rem; color: var(--ink-soft); border: 1px dashed var(--hair); border-radius: 3px; padding: 0.24rem 0.55rem; }
+  .cell--hot { border-style: solid; border-color: rgba(95,224,207,0.45); color: var(--teal); }
+  .flow { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.08em; color: var(--ink-faint); padding: 0.5rem 0; }
+  .flow::before { content:"↓"; color: var(--accent); margin-right: 0.5rem; }
+  .schematic__cap { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-faint); text-align: center; margin: 1.2rem 0 0; }
+
+  /* deferred ledger */
+  .ledger { margin: 1.6rem 0; max-width: 860px; }
+  .ledger__row {
+    display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.5fr); gap: 1.4rem;
+    padding: 1.1rem 0; border-top: 1px solid var(--hair); align-items: baseline;
+  }
+  .ledger__row:last-child { border-bottom: 1px solid var(--hair); }
+  .ledger__what { color: #f3f7fa; font-weight: 600; }
+  .tag-defer { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber); border: 1px solid rgba(227,176,103,0.4); border-radius: 2px; padding: 0.1rem 0.4rem; margin-left: 0.5rem; white-space: nowrap; }
+  .ledger__seam { color: var(--ink-soft); font-size: 0.95rem; }
+  .ledger__seam b { color: var(--accent); font-weight: 500; }
+
+  /* the piece — scenes + routes */
+  .scenes { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.6rem 0; max-width: 860px; }
+  .scene { border: 1px solid var(--hair); border-radius: 3px; padding: 1.2rem 1.3rem; background: var(--panel); position: relative; overflow: hidden; }
+  .scene::before { content:""; position:absolute; left:0; right:0; top:0; height: 2px; }
+  .scene--s::before { background: linear-gradient(90deg, var(--teal), transparent); }
+  .scene--d::before { background: linear-gradient(90deg, var(--indigo), transparent); }
+  .scene h4 { font-family: var(--display); font-weight: 400; font-size: 1.5rem; margin: 0 0 0.1rem; color: #f4f8fb; }
+  .scene .arc { font-family: var(--mono); font-size: 0.68rem; color: var(--ink-faint); letter-spacing: 0.08em; }
+  .scene dl { margin: 0.9rem 0 0; font-size: 0.9rem; }
+  .scene dt { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-faint); margin-top: 0.6rem; }
+  .scene dd { margin: 0.1rem 0 0; color: var(--ink-soft); }
+
+  .routes { width: 100%; border-collapse: collapse; margin: 1.4rem 0; font-family: var(--mono); font-size: 0.8rem; max-width: 860px; }
+  .routes th { text-align: left; padding: 0.6rem 0.7rem; font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; border-bottom: 1px solid var(--hair-strong); }
+  .routes td { padding: 0.6rem 0.7rem; border-bottom: 1px solid var(--hair); color: var(--ink-soft); }
+  .routes tr:hover td { background: rgba(95,224,207,0.03); }
+  .routes code { background: none; border: 0; padding: 0; color: #cbe6df; font-size: 1em; white-space: nowrap; }
+  .routes .dir { color: var(--teal); }
+  .routes .r-audio .dir { color: var(--indigo); }
+
+  /* ============================================================ COLOPHON = */
+  .stack { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1.2rem 0 2.4rem; }
+  .stack span { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); border: 1px solid var(--hair); border-radius: 2px; padding: 0.32rem 0.6rem; }
+  .filemap { margin: 1.2rem 0 2.4rem; max-width: 860px; }
+  .filemap__row { display: grid; grid-template-columns: minmax(0, 24rem) 1fr; gap: 1.2rem; padding: 0.5rem 0; border-top: 1px solid var(--hair); align-items: baseline; }
+  .filemap__row code { background: none; border: 0; padding: 0; color: var(--accent); font-size: 0.78rem; white-space: nowrap; }
+  .filemap__row span { color: var(--ink-soft); font-size: 0.92rem; }
+  .footnote { color: var(--ink-faint); font-size: 0.86rem; max-width: var(--measure); }
+
+  footer { position: relative; z-index: 1; border-top: 1px solid var(--hair); padding: 3rem var(--pad-x) 5rem; }
+  @media (min-width: 1040px) { footer { padding-left: calc(var(--gauge-w) + var(--pad-x) + 56px); } }
+  footer .mark {
+    font-family: var(--display); font-style: italic; font-size: 1.3rem; color: var(--ink-soft);
+  }
+  footer .coords { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-faint); margin-top: 0.6rem; }
+  footer .coords b { color: var(--indigo); }
+
+  /* ============================================================ MOTION ==== */
+  /* reveal is purely additive: content is visible by default, and only hidden
+     once JS has armed `html.anim` — which it does only when it can guarantee the
+     observer (and a fail-safe timeout) will restore it. Never gets stuck hidden. */
+  .reveal { opacity: 1; }
+  html.anim .reveal { opacity: 0; transform: translateY(18px); }
+  html.anim .reveal.in { opacity: 1; transform: none; transition: opacity .8s var(--ease), transform .8s var(--ease); }
+  @keyframes rise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+  .js .stagger > * { opacity: 0; animation: rise .95s var(--ease) forwards; }
+  .js .stagger > *:nth-child(1){ animation-delay:.05s }
+  .js .stagger > *:nth-child(2){ animation-delay:.16s }
+  .js .stagger > *:nth-child(3){ animation-delay:.28s }
+  .js .stagger > *:nth-child(4){ animation-delay:.40s }
+  .js .stagger > *:nth-child(5){ animation-delay:.52s }
+  @keyframes bob { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(4px) } }
+  .js .masthead__cue .arrow { animation: bob 1.8s ease-in-out infinite; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal, html.anim .reveal, html.anim .reveal.in { opacity: 1 !important; transform: none !important; transition: none !important; }
+    .js .stagger > * { opacity: 1 !important; animation: none !important; }
+    .js .masthead__cue .arrow { animation: none !important; }
+    .progress, .gauge__indicator { transition: none !important; }
+  }
+
+  /* ============================================================ RESPONSIVE  */
+  @media (max-width: 1039px) {
+    .gauge {
+      position: static; transform: none; width: auto; margin: 0 0 1rem;
+      border: 1px solid var(--hair); border-radius: 4px; padding: 1.2rem 1.3rem;
+      background: var(--panel);
+    }
+    .gauge__rail::before, .gauge__indicator { display: none; }
+    .gauge ol { columns: 2; column-gap: 1.6rem; }
+    .gauge a { padding-left: 0.9rem; }
+    .gauge a::before { display: none; }
+    .masthead { min-height: auto; padding: 12vh 0 8vh; }
+    .masthead__coord { position: static; text-align: left; margin-bottom: 1.5rem; }
+    .masthead__cue { position: static; margin-top: 3rem; }
+  }
+  @media (max-width: 620px) {
+    body { font-size: 17px; }
+    .split, .scenes { grid-template-columns: 1fr; }
+    .ledger__row, .filemap__row { grid-template-columns: 1fr; gap: 0.3rem; }
+    .masthead__meta { grid-template-columns: 1fr; }
+    .gauge ol { columns: 1; }
+    .node--row { grid-template-columns: 1fr; }
+    .chapter__head { flex-direction: column; gap: 0.3rem; align-items: flex-start; }
+    .routes { font-size: 0.72rem; }
+    .routes th:nth-child(3), .routes td:nth-child(3) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="atmos" aria-hidden="true"></div>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<nav class="gauge" aria-label="Contents — a descent through the rationale">
+  <span class="gauge__readout">Arc&nbsp; <b id="depthVal">0.00</b> &nbsp;·&nbsp; <span class="zone" id="depthZone">surface</span></span>
+  <div class="gauge__rail">
+    <div class="gauge__indicator" id="indicator"></div>
+    <ol>
+      <li><a href="#brief"><span class="gi">01</span><span>The brief &amp; the scope of v1</span></a></li>
+      <li><a href="#shape"><span class="gi">02</span><span>The shape of the system</span></a></li>
+      <li><a href="#rules"><span class="gi">03</span><span>The six load-bearing rules</span></a></li>
+      <li><a href="#finer"><span class="gi">04</span><span>Finer decisions, and why</span></a></li>
+      <li><a href="#verify"><span class="gi">05</span><span>How we know it works</span></a></li>
+      <li><a href="#deferred"><span class="gi">06</span><span>What is deferred &amp; the seams</span></a></li>
+      <li><a href="#piece"><span class="gi">07</span><span>The piece as it stands</span></a></li>
+      <li><a href="#colophon"><span class="gi">08</span><span>Colophon &amp; where to look</span></a></li>
+    </ol>
+  </div>
+</nav>
+
+<div class="shell">
+
+  <header class="masthead">
+    <div class="masthead__coord">descent begins<b>0.00</b></div>
+    <div class="stagger">
+      <p class="kicker">Design rationale · for review</p>
+      <h1>Borland Descent<span class="lo">— why it is built this way</span></h1>
+      <p class="masthead__standfirst">
+        A descent through the decisions behind <b>v1: the creative loop</b> — what each
+        constraint buys us, what it costs, and where the seams are left open for everything
+        that comes next.
+      </p>
+      <div class="masthead__meta">
+        <div><b>Author</b><span>Rob</span></div>
+        <div><b>Reader</b><span>Ian</span></div>
+        <div><b>Scope</b><span>v1 · the loop</span></div>
+        <div><b>Updated</b><span>8 Jun 2026</span></div>
+      </div>
+    </div>
+    <div class="masthead__cue"><span class="arrow">↓</span> scroll to descend</div>
+  </header>
+
+  <main>
+
+    <!-- IN ONE MINUTE -->
+    <section class="chapter reveal" aria-label="In one minute" style="border-top:0; --accent: var(--teal)">
+      <div class="manifest">
+        <p class="manifest__label">In one minute</p>
+        <ol>
+          <li><b>One document is the truth.</b><span>A zod-validated JSON <em>Patch</em> describes the whole piece. The studio edits it, the engine renders it, nothing else holds authored state.</span></li>
+          <li><b>The engine knows nothing of React.</b><span><code>packages/engine</code> imports only tone, three and zod — so the same engine runs the player, the studio, and whatever front-end comes later.</span></li>
+          <li><b>Everything modulatable is a typed port.</b><span>A small, type-checked matrix wires audio to visuals and gesture to audio — bidirectionally.</span></li>
+          <li><b>Control-rate and audio-rate stay strictly apart.</b><span>Conflating them is how generative audio engines get glitchy and untestable.</span></li>
+          <li><b>The hard parts are pure functions.</b><span>So the CI gate tests determinism, schema round-tripping and modulation logic without a browser.</span></li>
+          <li><b>v1 is deliberately small.</b><span>But every omission sits behind a clean seam — persistence, transitions and the full arc are cheap to add, not rewrites.</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 01 -->
+    <section class="chapter reveal" id="brief" data-accent="#5fe0cf" style="--accent:#5fe0cf">
+      <div class="chapter__head"><span class="chapter__num">01</span><h2>The brief, and the scope of v1</h2></div>
+      <p class="lead">
+        Borland Descent is a browser-based, smartphone-first generative music &amp; visual
+        experience — and the minimal studio used to author it.
+      </p>
+      <p class="drop">
+        The reference point is Brian Eno's generative apps (Bloom, Trope), pushed darker, more
+        personal, more immersive, and crucially <em>bidirectional</em>: the sound shapes the
+        image and the image's measured energy shapes the sound. It is a living collaboration
+        between two people in different cities, so the tooling has to make authoring a shared,
+        version-controlled act — not a private session in an opaque editor. That single fact
+        drives more of the architecture than anything aesthetic.
+      </p>
+
+      <h3><span class="h3-mark">→</span>What this repository is</h3>
+      <p>
+        This is <strong>v1: the creative loop</strong> — the smallest thing that lets us
+        compose and design real scene content and immediately hear and see it change. One
+        engine; one or two continuous generative scenes; a zoom gesture mapped to a position
+        along an emotional arc; a handful of real audio↔visual modulation routes; a studio that
+        edits scene parameters and those routes live; and lossless save/load of the work as JSON.
+      </p>
+
+      <h3><span class="h3-mark">→</span>What it deliberately is <em>not</em></h3>
+      <p>
+        There is no backend, no auth, no scene-to-scene transitions, and not yet the full
+        seven-scene arc. This is not an oversight to apologise for — it is the plan. The
+        riskiest, most defining question for a project like this is <em>“does the creative loop
+        actually feel good to work in?”</em> Everything else (accounts, hosting, sharing) is
+        comparatively well-understood plumbing. So v1 spends its complexity budget entirely on
+        the loop, and sequences the rest behind clean seams (see <a href="#deferred">§6</a>).
+      </p>
+      <blockquote class="pull">Build the part that might not work first. The plumbing can wait; the feel cannot.</blockquote>
+    </section>
+
+    <!-- 02 -->
+    <section class="chapter reveal" id="shape" data-accent="#59dbd6" style="--accent:#59dbd6">
+      <div class="chapter__head"><span class="chapter__num">02</span><h2>The shape of the system</h2></div>
+      <p>
+        Three things and the lines between them. A <strong>Patch</strong> holds the authored
+        piece. An <strong>Engine</strong> renders it. Two front-ends — the
+        <strong>player</strong> and the <strong>studio</strong> — instantiate the <em>same</em>
+        engine with the <em>same</em> patch. The studio additionally edits the patch and exports
+        it; collaboration happens through git.
+      </p>
+
+      <div class="schematic" role="img" aria-label="Player and studio both instantiate one framework-agnostic engine that reads a single Patch document, reached through a PatchStore.">
+        <div class="stratum">
+          <div class="node node--row">
+            <div class="node"><div class="node__name">PLAYER &nbsp;/</div><div class="node__sub">tap to begin · the experience</div></div>
+            <div class="node"><div class="node__name">STUDIO &nbsp;/studio</div><div class="node__sub">edit live · export JSON</div></div>
+          </div>
+          <div class="flow">both instantiate the same Engine, with the same Patch</div>
+          <div class="node">
+            <div class="node__name">ENGINE</div>
+            <div class="node__sub">framework-agnostic — tone · three · zod only</div>
+            <div class="cells">
+              <span class="cell">Transport · one clock</span>
+              <span class="cell">Audio graph</span>
+              <span class="cell cell--hot">Modulation matrix</span>
+              <span class="cell">Visual graph</span>
+              <span class="cell">Gesture → arc</span>
+            </div>
+          </div>
+          <div class="flow">reads &amp; renders · the studio also writes back</div>
+          <div class="node node--core">
+            <div class="node__name">THE PATCH</div>
+            <div class="node__sub">zod-validated JSON · the single source of truth</div>
+          </div>
+          <div class="flow">load / save</div>
+          <div class="node">
+            <div class="node__name">PatchStore</div>
+            <div class="node__sub">JsonPatchStore today → reactive backend (Convex) later, same interface</div>
+          </div>
+        </div>
+        <p class="schematic__cap">The Patch is the foundation; everything above renders or edits it. Persistence is reached only through the store seam.</p>
+      </div>
+
+      <p>
+        Reading this top-down is the descent the work is named for: the surface is what you
+        touch, the truth is underneath. Reading it bottom-up is the dependency order — the Patch
+        and its store know nothing of the engine; the engine knows nothing of React; React knows
+        nothing of how you choose to host it.
+      </p>
+    </section>
+
+    <!-- 03 -->
+    <section class="chapter reveal" id="rules" data-accent="#57cfe0" style="--accent:#57cfe0">
+      <div class="chapter__head"><span class="chapter__num">03</span><h2>The six load-bearing rules</h2></div>
+      <p class="lead">
+        The non-negotiables — each a constraint accepted on purpose for what it guarantees
+        downstream, and most enforced mechanically rather than by good intentions.
+      </p>
+
+      <div class="card">
+        <div class="card__rule"><span class="chip">Rule 1</span><h3>The Patch is the single source of truth</h3></div>
+        <p>A zod-validated JSON document describes the whole piece — DNA, scenes, the audio and visual graphs, and the modulation matrix. The studio edits it; the engine renders it; nothing else holds authored state.</p>
+        <dl>
+          <dt>Why</dt>
+          <dd>If authored state lived in React component state, or scattered across engine objects, then “the piece” would be un-saveable, un-diffable and un-shareable. Making one serialisable document canonical is what makes <strong>save/load lossless</strong> and <strong>git the collaboration medium</strong> — the founding requirement.</dd>
+          <dt>Trade-off</dt>
+          <dd>Every authored thing must be expressible as plain data. No clever closures or live object references in the authored layer. That discipline is the point.</dd>
+          <dt>Enforced by</dt>
+          <dd>A single schema in <code>patch/schema.ts</code>; the engine takes a <code>Patch</code> and never invents state the patch cannot describe; the studio round-trips it on export.</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card__rule"><span class="chip">Rule 2</span><h3>The engine is framework-agnostic</h3></div>
+        <p>It imports only <strong>tone, three and zod</strong> — never React, never Vite. The player and studio both instantiate the same <code>Engine</code> with the same Patch.</p>
+        <dl>
+          <dt>Why</dt>
+          <dd>The engine is the asset with a ten-year life; React 19 is a detail of this year. A clean boundary means a future native shell, a different UI framework, or a headless render can reuse the engine untouched — and keeps it <em>testable</em> as plain TypeScript.</dd>
+          <dt>What it rejects</dt>
+          <dd>The tempting shortcut of reaching into a React context from inside audio code. Convenient once, a tangled dependency forever.</dd>
+          <dt>Enforced by</dt>
+          <dd>Two independent guards: the engine's <code>package.json</code> lists only tone/three/zod, and an ESLint <code>no-restricted-imports</code> rule fails the build if anything under <code>packages/engine</code> imports react or vite. Belt <em>and</em> braces, because this is the rule most likely to be broken under deadline pressure.</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card__rule"><span class="chip">Rule 3</span><h3>Persistence is reached only through <code>PatchStore</code></h3></div>
+        <p>v1 ships a <code>JsonPatchStore</code> (fetch a committed JSON file; export is a browser download). A reactive backend later implements the <em>same interface</em>, unchanged.</p>
+        <dl>
+          <dt>Why</dt>
+          <dd>It lets v1 ship with zero backend while guaranteeing that adding one (Convex is the intended target) is an <strong>implementation swap, not a refactor</strong>. The <code>load / save / list? / subscribe?</code> shape already anticipates a live, multi-user backend.</dd>
+          <dt>Trade-off</dt>
+          <dd>In v1, <code>save</code> deliberately throws: you export from the studio and commit the file. Slightly manual, but it means “saving” is a git commit with full history and review — exactly right for a two-person collaboration today.</dd>
+          <dt>Enforced by</dt>
+          <dd>Nothing in the engine or studio imports a concrete store; they depend on the <code>PatchStore</code> interface in <code>patch/store.ts</code>.</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card__rule"><span class="chip">Rule 4</span><h3>Everything modulatable is a typed, addressable port</h3></div>
+        <p>A <code>PortRef</code> is a stable string <code>"nodeId.portName"</code>. Ports have a kind — <code>scalar · unipolar · bipolar · trigger · vector</code> — and a direction. The matrix only connects type-compatible ports.</p>
+        <dl>
+          <dt>Why</dt>
+          <dd>Modulation needs a vocabulary that is both stable in the saved document and richly typed at runtime. A string address survives serialisation and git diffs; the kind lets the matrix refuse nonsense instead of silently producing garbage.</dd>
+          <dt>Design detail</dt>
+          <dd>Node ids are dot-free by schema, so the dot in a <code>PortRef</code> is always unambiguous. Numeric kinds interoperate — the matrix scales and curves between them — while <code>trigger</code> and <code>vector</code> only pair with their own kind. Pragmatic where it is safe, strict where it is not.</dd>
+          <dt>Enforced by</dt>
+          <dd>The schema validates the <code>PortRef</code> format; <code>isCompatible()</code> in <code>core/ports.ts</code> gates every route; a registry maps abstract refs to live engine objects at build time.</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card__rule"><span class="chip">Rule 5</span><h3>Audio and visual share one clock</h3></div>
+        <p>A single <code>Transport</code> over Tone's transport. Audio events schedule against its look-ahead; the visual rAF loop <em>reads</em> transport time each frame.</p>
+        <dl>
+          <dt>Why</dt>
+          <dd>Two clocks drift, and drift between sound and image is exactly the thing that breaks immersion. One clock means the picture is always referring to the same time the music is keeping.</dd>
+          <dt>Honest limit</dt>
+          <dd>The visual loop is <em>related</em> to audio time, not sample-accurate — it reads transport seconds per frame rather than being driven by the audio thread. For a generative ambient piece that is the right trade: cheap, smooth, and close enough that the eye never catches the seam.</dd>
+          <dt>Enforced by</dt>
+          <dd>All time flows through <code>core/transport.ts</code>, using the Tone v15 getter API (<code>Tone.getTransport()</code>) rather than a second timer.</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card__rule"><span class="chip">Rule 6</span><h3>Control-rate and audio-rate modulation are not interchangeable</h3></div>
+        <p>A route's <code>rate</code> field records which it is, and they are wired by entirely different mechanisms.</p>
+        <div class="split">
+          <div class="split--c"><h4>Control-rate</h4><p>Evaluated once per frame and smoothed. Used for visual uniforms, reverb/filter moves, and <em>all</em> audio→visual links. Cheap, inspectable, smoothed against frame jitter.</p></div>
+          <div class="split--a"><h4>Audio-rate</h4><p>Wired once as a native <code>Tone.Signal</code> connection (an LFO or envelope into a cutoff or amp) and <em>never</em> written per frame. Sample-accurate, zero per-frame cost.</p></div>
+        </div>
+        <dl>
+          <dt>Why</dt>
+          <dd>This is the decision that keeps the engine both <strong>smooth and correct</strong>. Writing an audio-rate signal from JavaScript every frame produces zipper noise and wastes the audio thread; evaluating a per-frame control value as if it were an audio signal makes it untestable and jittery. Naming the rate in the document forces the author — and the engine — to be honest about which world each route lives in.</dd>
+          <dt>Enforced by</dt>
+          <dd>The <code>Matrix</code> branches on <code>rate</code>: audio routes become a <code>Tone.Gain</code> between two native nodes at setup; control routes are accumulated and smoothed in the frame loop. The two paths never cross.</dd>
+        </dl>
+      </div>
+    </section>
+
+    <!-- 04 -->
+    <section class="chapter reveal" id="finer" data-accent="#62ade9" style="--accent:#62ade9">
+      <div class="chapter__head"><span class="chapter__num">04</span><h2>Finer decisions, and why</h2></div>
+      <p class="lead">The rules set the frame. These are the smaller, less obvious choices that make the thing actually pleasant — and safe — to work in.</p>
+
+      <h3><span class="h3-mark">→</span>Schema-first, with forward compatibility built in</h3>
+      <p>The zod schemas are <em>canonical</em>; the TypeScript types are inferred from them with <code>z.infer</code>, so the two can never drift. Three small choices keep older patches loading as the document evolves:</p>
+      <ul class="body">
+        <li>the top level is a <em>loose</em> object, so an unknown future field is tolerated rather than rejected;</li>
+        <li><code>meta.version</code> carries the document schema version;</li>
+        <li>new fields use <code>.default()</code>, so a patch written before the field existed still validates.</li>
+      </ul>
+      <p>This matters because the canonical piece is committed to git and edited over months. A schema that rejected last week's patch would make the format hostile to the very collaboration it exists to serve. There is also a <strong>graceful-degrade</strong> path: if the patch is missing or invalid, the player falls back to a bundled default and still runs — never a blank screen.</p>
+
+      <h3><span class="h3-mark">→</span>Determinism that fixes <em>decisions</em>, not samples</h3>
+      <p>Composition is driven by a seeded RNG (mulberry32, with djb2 string hashing), so a given <code>meta.seed</code> reproduces the same compositional choices — the same notes, rhythms and parameter picks. It deliberately does <em>not</em> attempt bit-identical audio: live analyser values still vary run to run. Pinning <em>decisions</em> makes the piece reproducible enough to author against and to test; chasing bit-identical <em>output</em> would fight the Web Audio clock for no creative gain. The seed pins the score, not the performance.</p>
+
+      <h3><span class="h3-mark">→</span>The matrix: refuse, sum, and smooth — deterministically</h3>
+      <p>The modulation matrix is where the most subtle bugs hide, so three behaviours are defined explicitly:</p>
+      <ul class="body">
+        <li><strong>Refuse, don't guess.</strong> A route to an unknown port, or between incompatible kinds, is warned about and dropped — never silently summed or wired.</li>
+        <li><strong>Sum contributions, but smooth deterministically.</strong> When several control routes share one target, their contributions add — but a single smoothing time governs the result: the <em>slowest</em> (max) across those routes. An earlier “first route wins” policy meant reordering routes could change how the piece felt. Feel must not depend on array order.</li>
+        <li><strong>Relax to base when a route disappears.</strong> When the studio removes or disables a route live, its target snaps back to its base value. Without this, the target would freeze at its last modulated value. That “studio-edit freeze” was a real bug; the fix is now covered by a test.</li>
+      </ul>
+      <pre class="inv"><span class="c">// a modulation route, as stored in the Patch</span>
+{
+  source:  <span class="s">"bassMeter.level"</span>,   <span class="c">// an OUTPUT port</span>
+  target:  <span class="s">"field.fog"</span>,         <span class="c">// an INPUT port</span>
+  amount:  <span class="k">0.8</span>,                  <span class="c">// bipolar scale</span>
+  curve:   <span class="s">"sCurve"</span>,             <span class="c">// linear | exp | log | sCurve | invert</span>
+  rate:    <span class="s">"control"</span>,            <span class="c">// control (per-frame) | audio (native)</span>
+  smoothing: <span class="k">50</span>                   <span class="c">// ms — max across routes to one target wins</span>
+}</pre>
+
+      <h3><span class="h3-mark">→</span>Live editing without rebuilding the audio graph</h3>
+      <p>In the studio you can move a slider or rewire the matrix and hear it immediately, without the audio cutting out. Edits flow through engine methods (<code>setInputBase</code>, <code>setRoutes</code>) that mutate the running graph in place and keep the working patch in sync for export. The React lifecycle is keyed so ordinary edits do <em>not</em> tear the engine down — only a structural change (importing a patch, switching to a structurally different scene) bumps a <code>reloadToken</code> to force a clean rebuild.</p>
+
+      <h3><span class="h3-mark">→</span>The audio lifecycle, and the still first frame</h3>
+      <p>There is exactly one <code>AudioContext</code> for the page — Tone owns it, and we never construct a second (Safari caps them at roughly four). It can only be unlocked from a user gesture, so the player opens on a <em>still, inviting first frame</em>: visuals and gesture are built up front and rendered once; audio is built only when you tap to begin. On iOS the context can be interrupted by backgrounding, so there is an explicit “tap to resume” path. These are the difference between “it works on my laptop” and “it works on a phone on the train”.</p>
+
+      <h3><span class="h3-mark">→</span>Surviving React StrictMode and hot reload</h3>
+      <p>The engine owns real, disposable resources (audio nodes, a WebGL context, event listeners). React 19 StrictMode double-mounts in development and Vite hot-reloads modules, so the engine is created and disposed <em>symmetrically</em> inside an effect — not guarded by a lazy ref, which is unsafe under StrictMode — and <code>dispose()</code> unwinds everything it built. Getting this wrong leaks audio voices and WebGL contexts until the tab dies; getting it right is invisible, which is the goal.</p>
+
+      <h3><span class="h3-mark">→</span>Designed to a real phone</h3>
+      <p>The performance budget is a concrete device: a mid-range phone at a 390&nbsp;px viewport, iOS Safari. Several choices fall straight out of that target:</p>
+      <ul class="body">
+        <li>fragment shaders are favoured over heavy geometry, and device pixel ratio is capped at 2;</li>
+        <li>voices are capped (~24) and the FFT size kept small (512–1024);</li>
+        <li>the frame loop suspends when the tab is backgrounded, to save battery;</li>
+        <li><code>prefers-reduced-motion</code> is honoured — when set, the visual time is frozen so the picture holds still rather than animating.</li>
+      </ul>
+
+      <h3><span class="h3-mark">→</span>Compositional decisions kept pure</h3>
+      <p>The generative composer is split in two: a pure, deterministic <em>decision</em> function (seeded RNG in, note decisions out) and the Tone scheduling that plays those decisions. The split lets the musically interesting logic — how the DNA motif walks the scale, how arc density gates the pad, how the bass anchors the bar — be unit-tested headlessly, with no audio hardware. The CI smoke test exercises exactly this surface.</p>
+    </section>
+
+    <!-- 05 -->
+    <section class="chapter reveal" id="verify" data-accent="#7197ee" style="--accent:#7197ee">
+      <div class="chapter__head"><span class="chapter__num">05</span><h2>How we know it works</h2></div>
+      <p class="lead">The CI gate tests the <strong>pure-logic surface</strong> — the parts where a bug is silent and expensive — and is honest about what a headless runner cannot reach.</p>
+      <p>jsdom cannot run Web Audio or WebGL, so the engine's audio and visual <em>backends</em> are exercised behind interfaces, not for real. That is a deliberate boundary, not a gap: the value is in testing the logic that decides <em>what</em> to render, which is exactly the logic kept pure for this reason. Three pillars:</p>
+      <ul class="body">
+        <li><strong>Determinism</strong> — the seeded RNG reproduces the same sequence, so a seed reproduces a piece.</li>
+        <li><strong>Schema round-trip</strong> — a patch validates, serialises and re-validates losslessly; defaults apply forward-only.</li>
+        <li><strong>Matrix behaviour</strong> — type-incompatible routes are dropped and never write; smoothing across routes to one target is order-independent (max wins); a removed route relaxes its target back to base.</li>
+      </ul>
+      <p><code>npm run check</code> runs the full gate — strict TypeScript across both packages, ESLint (including the framework-agnostic boundary), and Vitest — and CI runs the same plus a production build on every push and pull request. A real-audio browser-mode suite (Playwright) is a documented later option for behaviour only a real audio context can show; it is intentionally not the gate today, because a flaky browser test that blocks merges would cost more than it catches.</p>
+    </section>
+
+    <!-- 06 -->
+    <section class="chapter reveal" id="deferred" data-accent="#8186f0" style="--accent:#8186f0">
+      <div class="chapter__head"><span class="chapter__num">06</span><h2>What is deferred, and the seams that keep it cheap</h2></div>
+      <p class="lead">Scope was cut deliberately. The test of a good cut is whether the deferred thing is a <em>swap</em> later, or a <em>rewrite</em>. Each of these is a swap, because the seam already exists.</p>
+      <div class="ledger">
+        <div class="ledger__row">
+          <div class="ledger__what">A reactive, multi-user backend <span class="tag-defer">deferred</span></div>
+          <div class="ledger__seam">The <b>PatchStore</b> interface already has the shape a live backend needs (<code>load / save / list / subscribe</code>). v1's <code>JsonPatchStore</code> and a later Convex store are interchangeable; nothing above the seam changes.</div>
+        </div>
+        <div class="ledger__row">
+          <div class="ledger__what">Scene-to-scene transitions <span class="tag-defer">deferred</span></div>
+          <div class="ledger__seam">The Patch schema <b>already models a <code>SceneTransition</code></b> (crossfade / morph / none, with duration). The data shape is reserved; only the runtime that interprets it is unbuilt.</div>
+        </div>
+        <div class="ledger__row">
+          <div class="ledger__what">The full seven-scene arc <span class="tag-defer">deferred</span></div>
+          <div class="ledger__seam">Scenes already declare an <b><code>arcRange</code></b> slice of 0..1, and the arc is keyframed continuously. Going from two scenes to seven is more authored content, not a structural change.</div>
+        </div>
+        <div class="ledger__row">
+          <div class="ledger__what">Accounts, hosting, sharing <span class="tag-defer">deferred</span></div>
+          <div class="ledger__seam">Because the engine is <b>framework-agnostic</b> and the output is a <b>static build</b>, the player hosts as plain static assets with an SPA fallback, and auth can wrap the studio later without touching the engine.</div>
+        </div>
+      </div>
+      <p>The thread running through all four: <strong>the constraints in §3 are what make the omissions safe.</strong> A single source of truth, a clean engine boundary and a persistence seam are precisely the things that turn “we'll add it later” from a hope into a plan.</p>
+    </section>
+
+    <!-- 07 -->
+    <section class="chapter reveal" id="piece" data-accent="#897cef" style="--accent:#897cef">
+      <div class="chapter__head"><span class="chapter__num">07</span><h2>The piece as it stands</h2></div>
+      <p>To make the abstractions concrete: the canonical patch committed today is <strong>“Borland — Surface”</strong> (seed <code>20260606</code>, tempo 54–66&nbsp;bpm), a continuous descent across two structurally different scenes mapped to the lower and upper halves of the arc.</p>
+
+      <div class="scenes">
+        <div class="scene scene--s">
+          <h4>Surface</h4><span class="arc">arc 0.0 – 0.5</span>
+          <dl><dt>Synth</dt><dd><code>driftPad</code></dd><dt>Shader</dt><dd><code>oceanicField</code></dd><dt>Feel</dt><dd>luminous, open, slow</dd></dl>
+        </div>
+        <div class="scene scene--d">
+          <h4>Descent</h4><span class="arc">arc 0.5 – 1.0</span>
+          <dl><dt>Synth</dt><dd><code>voidChoir</code></dd><dt>Shader</dt><dd><code>abyss</code></dd><dt>Feel</dt><dd>darker, denser, dissonant</dd></dl>
+        </div>
+      </div>
+
+      <p>The single zoom gesture (drag, scroll or pinch on the preview) moves you through the arc; the world changes because you touched it, not because you found a dial. Five modulation routes wire the two domains together — note especially that they run <em>both</em> ways:</p>
+
+      <table class="routes">
+        <thead><tr><th>Source</th><th>Target</th><th>Curve</th><th>Direction · rate</th></tr></thead>
+        <tbody>
+          <tr><td><code>gesture.zoomDepth</code></td><td><code>voices.cutoff</code></td><td>exp</td><td class="dir">gesture → audio · control</td></tr>
+          <tr><td><code>bassMeter.level</code></td><td><code>field.fog</code></td><td>sCurve</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>fft.low</code></td><td><code>field.flow</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>masterMeter.level</code></td><td><code>bloom.strength</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr class="r-audio"><td><code>wobble.out</code></td><td><code>voices.cutoff</code></td><td>linear</td><td class="dir">LFO → audio · audio-rate</td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">That last row is the only audio-rate route — a wobble LFO wired natively into the filter cutoff, never touched per frame — sharing its target with a control-rate gesture route. A small but complete demonstration of Rule&nbsp;6: two routes, two rates, one target, kept rigorously apart.</p>
+    </section>
+
+    <!-- 08 -->
+    <section class="chapter reveal" id="colophon" data-accent="#9072ea" style="--accent:#9072ea">
+      <div class="chapter__head"><span class="chapter__num">08</span><h2>Colophon &amp; where to look</h2></div>
+
+      <h3><span class="h3-mark">→</span>Stack</h3>
+      <div class="stack">
+        <span>Vite 8</span><span>React 19 · app only</span><span>TypeScript 6</span>
+        <span>Tone.js ~15.1</span><span>Three.js ^0.184</span><span>zod ^4</span>
+        <span>Vitest 4</span><span>ESLint 10</span><span>npm workspaces</span><span>Node ≥ 22.12</span>
+      </div>
+
+      <h3><span class="h3-mark">→</span>If you change one thing, read this first</h3>
+      <p>The two rules most expensive to break are <strong>Rule&nbsp;1 (the Patch is the truth)</strong> and <strong>Rule&nbsp;2 (the engine imports no framework)</strong>. Almost every other decision is downstream of those two. The ESLint boundary will stop you breaking Rule&nbsp;2 by accident; nothing but care will stop you breaking Rule&nbsp;1 — so when adding a feature, ask first: <em>“can this be expressed in the Patch?”</em></p>
+
+      <h3><span class="h3-mark">→</span>Where the decisions live in the code</h3>
+      <div class="filemap">
+        <div class="filemap__row"><code>packages/engine/src/patch/schema.ts</code><span>The Patch — zod, canonical; types inferred from it.</span></div>
+        <div class="filemap__row"><code>packages/engine/src/patch/store.ts</code><span>The persistence seam (Rule 3).</span></div>
+        <div class="filemap__row"><code>packages/engine/src/core/engine.ts</code><span>The engine, the frame loop, the live-edit surface.</span></div>
+        <div class="filemap__row"><code>packages/engine/src/core/ports.ts</code><span>Typed ports and the compatibility rule (Rule 4).</span></div>
+        <div class="filemap__row"><code>packages/engine/src/modulation/matrix.ts</code><span>The matrix — the control/audio-rate split (Rule 6).</span></div>
+        <div class="filemap__row"><code>packages/engine/src/core/transport.ts</code><span>The one shared clock (Rule 5).</span></div>
+        <div class="filemap__row"><code>packages/engine/src/core/rng.ts</code><span>Seeded determinism — decisions, not samples.</span></div>
+        <div class="filemap__row"><code>packages/engine/src/audio/context.ts</code><span>The single AudioContext and its unlock/resume path.</span></div>
+        <div class="filemap__row"><code>app/src/engineReact/useEngine.ts</code><span>StrictMode- and HMR-safe lifecycle.</span></div>
+        <div class="filemap__row"><code>eslint.config.mjs</code><span>The framework-agnostic boundary, mechanically enforced.</span></div>
+        <div class="filemap__row"><code>patches/borland.json</code><span>The canonical piece itself.</span></div>
+      </div>
+
+      <h3><span class="h3-mark">→</span>Run &amp; verify</h3>
+      <pre class="inv"><span class="c"># serve the app — / player, /studio studio, on :5173</span>
+npm run dev
+
+<span class="c"># the full gate: strict types + lint (incl. the engine boundary) + tests</span>
+npm run check
+
+<span class="c"># the static build CI also runs on every push / PR</span>
+npm run build</pre>
+      <p class="footnote">Test on iOS Safari at a 390&nbsp;px viewport — that is the performance budget, and the device every visual and audio cap is chosen for. British English throughout; no secrets in the repo; commit per phase.</p>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <p class="mark">Borland Descent — v1, the creative loop.</p>
+  <p class="coords">end of descent · arc <b>1.00</b> · the deep</p>
+</footer>
+
+<script>
+  /* Progressive enhancement only — the document is fully legible with JS off. */
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var root = document.documentElement;
+    var sections = Array.prototype.slice.call(document.querySelectorAll('main section[id]'));
+    var links = {};
+    document.querySelectorAll('.gauge a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+    var indicator = document.getElementById('indicator');
+    var progress = document.getElementById('progress');
+    var depthVal = document.getElementById('depthVal');
+    var depthZone = document.getElementById('depthZone');
+    var gauge = document.querySelector('.gauge');
+
+    function zone(p) {
+      if (p < 0.06) return 'surface';
+      if (p < 0.33) return 'the shallows';
+      if (p < 0.60) return 'mid-water';
+      if (p < 0.86) return 'the deep';
+      return 'the abyss';
+    }
+
+    /* depth readout + progress bar, rAF-throttled */
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return; ticking = true;
+      requestAnimationFrame(function () {
+        var max = document.documentElement.scrollHeight - window.innerHeight;
+        var p = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+        if (progress) progress.style.width = (p * 100).toFixed(2) + '%';
+        if (indicator) indicator.style.top = (p * 100).toFixed(2) + '%';
+        if (depthVal) depthVal.textContent = p.toFixed(2);
+        if (depthZone) depthZone.textContent = zone(p);
+        ticking = false;
+      });
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    onScroll();
+
+    /* active section → highlight the gauge + bleed the accent colour into the rail */
+    if ('IntersectionObserver' in window) {
+      var current = null;
+      var spy = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          var id = e.target.id, link = links[id];
+          if (link && link !== current) {
+            if (current) current.classList.remove('is-active');
+            current = link; current.classList.add('is-active');
+            var accent = e.target.getAttribute('data-accent');
+            if (accent && gauge) gauge.style.setProperty('--accent', accent);
+          }
+        });
+      }, { rootMargin: '-30% 0px -65% 0px', threshold: 0 });
+      sections.forEach(function (s) { spy.observe(s); });
+
+      /* reveal-on-enter — armed only when motion is welcome and the viewport is
+         real, so content can never end up stuck at opacity 0. */
+      if (!reduce && window.innerHeight > 0) {
+        root.classList.add('anim');
+        var rev = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting) { e.target.classList.add('in'); rev.unobserve(e.target); }
+          });
+        }, { rootMargin: '0px 0px -12% 0px', threshold: 0.05 });
+        document.querySelectorAll('.reveal').forEach(function (el) { rev.observe(el); });
+        /* fail-safe: whatever happens, nothing stays hidden */
+        setTimeout(function () {
+          document.querySelectorAll('.reveal:not(.in)').forEach(function (el) { el.classList.add('in'); });
+        }, 2600);
+      }
+    } else {
+      document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in'); });
+    }
+  })();
+</script>
+
+</body>
+</html>
