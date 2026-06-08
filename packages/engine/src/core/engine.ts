@@ -1,5 +1,6 @@
 import type { Patch, Scene, ModulationRoute } from '../patch/schema';
 import type { EngineOptions } from './types';
+import * as Tone from 'tone';
 import { Transport } from './transport';
 import { unlockAudio, resumeAudio, isAudioRunning } from '../audio/context';
 import { SignalRegistry, type InputPortInfo, type OutputPortInfo } from './registry';
@@ -32,6 +33,7 @@ export class Engine {
   private readonly reducedMotion: boolean;
   private readonly container?: HTMLElement;
   private active: SceneInstance | null = null;
+  private masterBus: Tone.Gain | null = null;
   private gesture: GestureController | null = null;
   private matrix: Matrix | null = null;
   private routes: ModulationRoute[];
@@ -93,8 +95,13 @@ export class Engine {
       return;
     }
     await unlockAudio();
+    // The host owns the shared master bus; each scene feeds it through its own gain,
+    // so two scenes can be summed and crossfaded (§18.2). One scene wired today.
+    this.masterBus = new Tone.Gain(1);
+    this.masterBus.connect(Tone.getDestination());
     this.active ??= this.makeScene();
     await this.active.build(); // builds the scene's audio + registers its ports
+    this.active.output?.connect(this.masterBus); // scene → shared master → speakers
     this.matrix = new Matrix(this.routes, this.registry);
     this.matrix.setup();
     this.transport.start();
@@ -211,6 +218,7 @@ export class Engine {
     this.transport.stop();
     this.matrix?.dispose();
     this.active?.dispose();
+    this.masterBus?.dispose();
     this.gesture?.dispose();
     this.registry.clear();
   }

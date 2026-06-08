@@ -1,3 +1,4 @@
+import * as Tone from 'tone';
 import type { Patch, Scene } from '../patch/schema';
 import type { SignalRegistry } from './registry';
 import type { Rng } from './rng';
@@ -30,6 +31,7 @@ export class SceneInstance {
   private readonly rng: Rng;
   private visual: VisualEngine | null = null;
   private audio: AudioEngine | null = null;
+  private sceneGain: Tone.Gain | null = null;
   private disposed = false;
 
   constructor(opts: SceneInstanceOptions) {
@@ -53,10 +55,20 @@ export class SceneInstance {
     if (this.disposed) return;
     this.audio = new AudioEngine(this.patch, this.scene, this.rng, this.registry);
     await this.audio.build();
+    // This scene's mixed output passes through its own gain, which the host connects
+    // into the shared master — and ramps to crossfade between two scenes (§18.2).
+    this.sceneGain = new Tone.Gain(1);
+    this.audio.output.connect(this.sceneGain);
   }
 
   startComposer(): void {
     this.audio?.startComposer();
+  }
+
+  /** This scene's audio output node — null until build(). The host connects it into
+   *  the shared master and ramps its gain for crossfades (§18.2). */
+  get output(): Tone.ToneAudioNode | null {
+    return this.sceneGain;
   }
 
   /** Apply arc macros to both the audio feel and the visual feel for this frame. */
@@ -80,6 +92,7 @@ export class SceneInstance {
     if (this.disposed) return;
     this.disposed = true;
     this.audio?.dispose();
+    this.sceneGain?.dispose();
     this.visual?.dispose();
   }
 }

@@ -74,8 +74,8 @@ export class AudioEngine {
     this.bass.output.connect(this.dryBus);
     this.dryBus.connect(this.master);
 
-    // Master out + analyser taps
-    this.master.connect(Tone.getDestination());
+    // Analyser taps. The master is exposed as `output` and routed to the shared host
+    // master bus by the Engine, so scenes can be summed and crossfaded (§18.2 seam).
     this.master.connect(this.analysers.masterMeter);
     this.master.connect(this.analysers.fft);
     this.bass.output.connect(this.analysers.bassMeter);
@@ -146,6 +146,11 @@ export class AudioEngine {
   applyArc(position: number): void {
     const m = macrosAt(this.patch.dna.arc, position);
     this.composer.density = m.density;
+  }
+
+  /** The scene's mixed audio output — the host routes this into the shared master. */
+  get output(): Tone.ToneAudioNode {
+    return this.master;
   }
 
   dispose(): void {
