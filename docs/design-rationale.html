@@ -715,6 +715,9 @@
       <h3><span class="h3-mark">→</span>Live editing without rebuilding the audio graph</h3>
       <p>In the studio you can move a slider or rewire the matrix and hear it immediately, without the audio cutting out. Edits flow through engine methods (<code>setInputBase</code>, <code>setRoutes</code>) that mutate the running graph in place and keep the working patch in sync for export. The React lifecycle is keyed so ordinary edits do <em>not</em> tear the engine down — only a structural change (importing a patch, switching to a structurally different scene) bumps a <code>reloadToken</code> to force a clean rebuild.</p>
 
+      <h3><span class="h3-mark">→</span>The engine as a host; a scene as a unit</h3>
+      <p>The engine does not own a scene's audio and visuals directly — it <em>hosts</em> them. A <code>SceneInstance</code> bundles one scene's audio graph and visual stack and registers their ports; the <code>Engine</code> keeps only the shared, scene-independent concerns — the one transport, the gesture input, the port registry and the modulation matrix — and drives the active instance each frame. Today it holds exactly one. Carving it out <em>now</em>, while it still holds one, is what turns the two deferred features that need a scene to be a movable unit — a crossfade that runs two scenes at once, and an arc that hands off from one scene to the next — into the host holding <em>two</em> instances and blending them, rather than a rewrite of the engine's core. Draw the line before code leans on the engine owning a single scene, not after.</p>
+
       <h3><span class="h3-mark">→</span>The audio lifecycle, and the still first frame</h3>
       <p>There is exactly one <code>AudioContext</code> for the page — Tone owns it, and we never construct a second (Safari caps them at roughly four). It can only be unlocked from a user gesture, so the player opens on a <em>still, inviting first frame</em>: visuals and gesture are built up front and rendered once; audio is built only when you tap to begin. On iOS the context can be interrupted by backgrounding, so there is an explicit “tap to resume” path. These are the difference between “it works on my laptop” and “it works on a phone on the train”.</p>
 
@@ -758,7 +761,7 @@
         </div>
         <div class="ledger__row">
           <div class="ledger__what">Scene-to-scene transitions <span class="tag-defer">deferred</span></div>
-          <div class="ledger__seam">The Patch schema <b>already models a <code>SceneTransition</code></b> (crossfade / morph / none, with duration). The data shape is reserved; only the runtime that interprets it is unbuilt.</div>
+          <div class="ledger__seam">The Patch schema <b>already models a <code>SceneTransition</code></b> (crossfade / morph / none, with duration), and the runtime now has the unit it needs: the engine hosts a self-contained <b><code>SceneInstance</code></b>. A crossfade becomes the host holding a second instance and ramping a blend — not a re-plumb.</div>
         </div>
         <div class="ledger__row">
           <div class="ledger__what">The full seven-scene arc <span class="tag-defer">deferred</span></div>
@@ -821,7 +824,8 @@
       <div class="filemap">
         <div class="filemap__row"><code>packages/engine/src/patch/schema.ts</code><span>The Patch — zod, canonical; types inferred from it.</span></div>
         <div class="filemap__row"><code>packages/engine/src/patch/store.ts</code><span>The persistence seam (Rule 3).</span></div>
-        <div class="filemap__row"><code>packages/engine/src/core/engine.ts</code><span>The engine, the frame loop, the live-edit surface.</span></div>
+        <div class="filemap__row"><code>packages/engine/src/core/engine.ts</code><span>The engine — host, frame loop, live-edit surface.</span></div>
+        <div class="filemap__row"><code>packages/engine/src/core/sceneInstance.ts</code><span>One scene's audio + visual, hosted by the engine — the transition seam.</span></div>
         <div class="filemap__row"><code>packages/engine/src/core/ports.ts</code><span>Typed ports and the compatibility rule (Rule 4).</span></div>
         <div class="filemap__row"><code>packages/engine/src/modulation/matrix.ts</code><span>The matrix — the control/audio-rate split (Rule 6).</span></div>
         <div class="filemap__row"><code>packages/engine/src/core/transport.ts</code><span>The one shared clock (Rule 5).</span></div>
