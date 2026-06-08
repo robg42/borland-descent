@@ -32,6 +32,16 @@ backend, auth, transitions, or seven-scene arc — see the build plan).
    as native `Tone.Signal`/Web-Audio connections and never written per frame
    (LFO/envelope → cutoff/amp). A route's `rate` field records which.
 
+## Design rationale — keep it current
+
+`docs/design-rationale.html` explains *why* the project is built this way (the golden
+rules above, the trade-offs, the deferred seams) and exists for review. It is
+**decision-bearing documentation**: when a change touches a golden rule or the files
+that enforce them — `packages/engine/src/{patch,core,modulation}`, `eslint.config.mjs`,
+the Patch schema, or the persistence seam — update the rationale **in the same change**
+and bump its masthead "Updated" date. Treat a drifted rationale as a failing check, not
+a chore for later. (A weekly scheduled review opens a PR as a backstop if this is missed.)
+
 ## Stack & versions
 
 Vite 8 · React 19 (studio/player only) · TypeScript 6 · **Tone.js `~15.1`**
