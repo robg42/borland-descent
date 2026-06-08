@@ -5,18 +5,23 @@ import { unlockAudio, resumeAudio, isAudioRunning } from '../audio/context';
 import { SignalRegistry, type InputPortInfo, type OutputPortInfo } from './registry';
 import { Rng } from './rng';
 import { parsePortRef, type PortRef } from './ports';
-import { AudioEngine } from '../audio/audioEngine';
-import { VisualEngine } from '../visual/visualEngine';
 import { Matrix, restoreDroppedControlTargets } from '../modulation/matrix';
 import { GestureController } from '../gesture/gesture';
+import { SceneInstance } from './sceneInstance';
 
 /**
  * The engine consumes a validated Patch and renders it. Framework-agnostic: the
  * player and the studio both instantiate this same class with the same Patch.
  *
- * Visuals + gesture are created up front (the still first frame). Audio is built on
- * start() — inside a user gesture — then the matrix is wired and the single rAF loop
- * runs: read arc from the gesture, apply it, evaluate control-rate routes, render.
+ * The Engine is a HOST: it owns the shared clock, the gesture input, the shared
+ * registry and the modulation matrix, and it drives one active SceneInstance (which
+ * owns that scene's audio + visual). Holding a second instance and crossfading is the
+ * §18.2 seam — the Engine no longer owns audio/visual directly.
+ *
+ * The active scene's visual + the gesture are created up front (the still first
+ * frame). Audio is built on start() — inside a user gesture — then the matrix is
+ * wired and the single rAF loop runs: read arc, apply it, evaluate control-rate
+ * routes, render.
  */
 export class Engine {
   readonly patch: Patch;
@@ -25,9 +30,9 @@ export class Engine {
   private readonly transport = new Transport();
   private readonly rng: Rng;
   private readonly reducedMotion: boolean;
-  private visual: VisualEngine | null = null;
+  private readonly container?: HTMLElement;
+  private active: SceneInstance | null = null;
   private gesture: GestureController | null = null;
-  private audio: AudioEngine | null = null;
   private matrix: Matrix | null = null;
   private routes: ModulationRoute[];
   private rafId: number | null = null;
@@ -47,6 +52,7 @@ export class Engine {
     const scene = opts.patch.scenes[opts.sceneIndex ?? 0] ?? opts.patch.scenes[0];
     if (!scene) throw new Error('Patch has no scenes');
     this.scene = scene;
+    this.container = opts.container;
     this.routes = opts.patch.modulationMatrix;
     this.rng = new Rng(opts.patch.meta.seed);
     this.manualArc = Math.min(1, Math.max(0, opts.initialArc ?? 0));
@@ -59,20 +65,24 @@ export class Engine {
     this.transport.setBpm((minBpm + maxBpm) / 2);
 
     if (opts.container) {
-      this.visual = new VisualEngine({
-        patch: this.patch,
-        scene,
-        registry: this.registry,
-        container: opts.container,
-        reducedMotion: this.reducedMotion,
-      });
       this.gesture = new GestureController(opts.container);
       this.gesture.setArcPosition(this.manualArc); // preserve arc across a scene rebuild
       this.gesture.registerPorts(this.registry);
+      this.active = this.makeScene();
       // a still, inviting first frame before audio is unlocked
-      this.visual.applyArc(this.arcPosition);
-      this.visual.render(0, 0);
+      this.active.renderStill(this.arcPosition);
     }
+  }
+
+  private makeScene(): SceneInstance {
+    return new SceneInstance({
+      patch: this.patch,
+      scene: this.scene,
+      registry: this.registry,
+      rng: this.rng,
+      container: this.container,
+      reducedMotion: this.reducedMotion,
+    });
   }
 
   /** Unlock audio (MUST be inside a user gesture), build the audio graph + matrix. */
@@ -83,12 +93,12 @@ export class Engine {
       return;
     }
     await unlockAudio();
-    this.audio = new AudioEngine(this.patch, this.scene, this.rng, this.registry);
-    await this.audio.build();
+    this.active ??= this.makeScene();
+    await this.active.build(); // builds the scene's audio + registers its ports
     this.matrix = new Matrix(this.routes, this.registry);
     this.matrix.setup();
     this.transport.start();
-    this.audio.startComposer();
+    this.active.startComposer();
     this.running = true;
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -176,10 +186,9 @@ export class Engine {
       const dt = this.lastTs === 0 ? 0 : (ts - this.lastTs) / 1000;
       this.lastTs = ts;
       const pos = this.arcPosition;
-      this.audio?.applyArc(pos);
-      this.visual?.applyArc(pos);
+      this.active?.applyArc(pos);
       this.matrix?.evaluateControl(dt);
-      this.visual?.render(this.reducedMotion ? 0 : this.transport.seconds, dt);
+      this.active?.render(this.reducedMotion ? 0 : this.transport.seconds, dt);
       this.rafId = requestAnimationFrame(tick);
     };
     this.rafId = requestAnimationFrame(tick);
@@ -201,9 +210,8 @@ export class Engine {
     this.stopLoop();
     this.transport.stop();
     this.matrix?.dispose();
-    this.audio?.dispose();
+    this.active?.dispose();
     this.gesture?.dispose();
-    this.visual?.dispose();
     this.registry.clear();
   }
 }
