@@ -4,6 +4,7 @@ import { Engine, type Patch } from '@borland/engine';
 interface EngineBuildOpts {
   sceneIndex?: number;
   initialArc?: number;
+  autoScene?: boolean;
 }
 
 /**
@@ -34,6 +35,7 @@ export function useEngine(
       container,
       sceneIndex: optsRef.current?.sceneIndex,
       initialArc: optsRef.current?.initialArc,
+      autoScene: optsRef.current?.autoScene,
     });
     setEngine(instance);
     return () => {

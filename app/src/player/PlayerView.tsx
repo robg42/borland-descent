@@ -24,7 +24,7 @@ export function PlayerView() {
     };
   }, []);
 
-  const engine = useEngine(patch, container, patch ? 1 : 0);
+  const engine = useEngine(patch, container, patch ? 1 : 0, { autoScene: true });
 
   const begin = useCallback(() => {
     if (!engine || busy || started) return;

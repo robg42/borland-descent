@@ -11,6 +11,9 @@ export interface EngineOptions {
   container?: HTMLElement;
   /** Override prefers-reduced-motion detection. */
   reducedMotion?: boolean;
+  /** Drive scene selection from the arc position (the player). The studio leaves this
+   *  off and selects scenes manually. */
+  autoScene?: boolean;
 }
 
 export interface Disposable {
