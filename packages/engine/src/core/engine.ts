@@ -156,6 +156,12 @@ export class Engine {
     if (index < 0 || index >= this.patch.scenes.length) return;
     this.swapping = true;
     try {
+      // fade the master down so the outgoing scene's reverb tail doesn't cut abruptly
+      if (this.masterBus) {
+        this.masterBus.gain.rampTo(0, 0.12);
+        await new Promise<void>((resolve) => setTimeout(resolve, 140));
+        if (this.disposed) return;
+      }
       this.activeIndex = index;
       this.matrix?.dispose();
       this.matrix = null;
@@ -175,6 +181,8 @@ export class Engine {
         this.matrix = new Matrix(this.routes, this.registry);
         this.matrix.setup();
         next.startComposer();
+        // bloom the new scene in rather than blasting it at full level
+        this.masterBus.gain.rampTo(1, 0.7);
       }
     } finally {
       this.swapping = false;
