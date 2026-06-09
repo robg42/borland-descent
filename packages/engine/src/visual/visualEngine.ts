@@ -83,8 +83,15 @@ export class VisualEngine {
 
     const canvas = this.renderer.domElement;
     canvas.style.display = 'block';
+    // Absolute + inset so two scenes' canvases overlap and can be opacity-blended
+    // during a crossfade (§18.2). The container is made a positioning context.
+    canvas.style.position = 'absolute';
+    canvas.style.inset = '0';
     canvas.style.width = '100%';
     canvas.style.height = '100%';
+    if (typeof getComputedStyle !== 'undefined' && getComputedStyle(this.container).position === 'static') {
+      this.container.style.position = 'relative';
+    }
     canvas.addEventListener('webglcontextlost', this.onContextLost, false);
     canvas.addEventListener('webglcontextrestored', this.onContextRestored, false);
     this.container.appendChild(canvas);
@@ -160,6 +167,11 @@ export class VisualEngine {
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     this.layer.setResolution(w, h);
+  }
+
+  /** Canvas opacity (0..1) — the host cross-fades two scenes' canvases on a transition. */
+  setOpacity(v: number): void {
+    this.renderer.domElement.style.opacity = String(clamp(v, 0, 1));
   }
 
   /** Apply arc macros to the visual feel (brief §6: surface luminous, centre dark). */

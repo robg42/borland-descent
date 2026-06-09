@@ -88,6 +88,17 @@ export class SceneInstance {
     this.visual?.render(0, 0);
   }
 
+  /** Set this scene's audio level instantly (0..1). The host ramps it per frame to
+   *  cross-fade against another scene (§18.2). No-op before build(). */
+  setLevel(v: number): void {
+    if (this.sceneGain) this.sceneGain.gain.value = v;
+  }
+
+  /** Set this scene's visual opacity (0..1) — the host blends two scenes' canvases. */
+  setOpacity(v: number): void {
+    this.visual?.setOpacity(v);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

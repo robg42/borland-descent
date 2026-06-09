@@ -15,23 +15,24 @@ import { SceneInstance } from './sceneInstance';
  * The engine consumes a validated Patch and renders it. Framework-agnostic: the
  * player and the studio both instantiate this same class with the same Patch.
  *
- * The Engine is a HOST: it owns the shared clock, the gesture input, the shared
+ * The Engine is a HOST: it owns the shared clock, the gesture input, the active
  * registry, the master bus and the modulation matrix, and it drives one active
  * SceneInstance (which owns that scene's audio + visual).
  *
- * In `autoScene` mode (the player) the arc position selects the scene: as the arc
- * crosses into another scene's `arcRange`, the host swaps the active SceneInstance in
- * place — the visual switches immediately and the new scene's audio rebuilds — while
- * the transport, gesture and master bus keep running. Exactly one scene is live at a
- * time, so scene ports never collide. The studio leaves `autoScene` off and selects
- * scenes manually. (A crossfade that overlaps two scenes is the §18.2 follow-on.)
+ * In `autoScene` mode (the player) the arc position selects the scene. As the arc
+ * crosses into another scene's `arcRange` the host CROSSFADES (§18.2): it holds both
+ * scenes, ramping their audio gains (equal-power) and visual opacity against each
+ * other over the scene's transition duration, then hands over. The incoming scene
+ * builds into its OWN registry so its ports don't collide; the outgoing scene stays
+ * matrix-driven through the fade while the incoming plays on base params; at the end
+ * the incoming's registry becomes active and the matrix re-wires to it. The studio
+ * leaves `autoScene` off and selects scenes manually.
  */
 export class Engine {
   readonly patch: Patch;
   private activeIndex: number;
   private readonly autoScene: boolean;
-  private swapping = false;
-  private readonly registry = new SignalRegistry();
+  private registry = new SignalRegistry();
   private readonly transport = new Transport();
   private readonly rng: Rng;
   private readonly reducedMotion: boolean;
@@ -46,6 +47,15 @@ export class Engine {
   private running = false;
   private disposed = false;
   private manualArc = 0;
+
+  // ---- crossfade state (§18.2) ----
+  private transitioning = false;
+  private incoming: SceneInstance | null = null;
+  private incomingRegistry: SignalRegistry | null = null;
+  private incomingIndex = 0;
+  private incomingReady = false;
+  private crossfadeElapsed = 0;
+  private crossfadeDur = 0;
 
   private readonly onVisibilityChange = (): void => {
     if (typeof document === 'undefined') return;
@@ -74,15 +84,15 @@ export class Engine {
     this.transport.setBpm((minBpm + maxBpm) / 2);
 
     // The arc position is itself a modulation SOURCE (arc.darkness, …), read live each
-    // frame — so routes can drive anything from the descent (e.g. degradation deepening).
-    // Host-level: re-registered after every scene swap (which clears the registry).
-    this.registerArcPorts();
+    // frame — so routes can drive anything from the descent. Host-level: re-registered
+    // into each scene's registry (the active one and any incoming one during a crossfade).
+    this.registerArcPorts(this.registry);
 
     if (opts.container) {
       this.gesture = new GestureController(opts.container);
       this.gesture.setArcPosition(this.manualArc); // preserve arc across a scene rebuild
       this.gesture.registerPorts(this.registry);
-      this.active = this.makeScene();
+      this.active = this.makeScene(this.activeIndex, this.registry);
       // a still, inviting first frame before audio is unlocked
       this.active.renderStill(this.arcPosition);
     }
@@ -93,11 +103,11 @@ export class Engine {
     return this.patch.scenes[this.activeIndex]!;
   }
 
-  private makeScene(): SceneInstance {
+  private makeScene(index: number, registry: SignalRegistry): SceneInstance {
     return new SceneInstance({
       patch: this.patch,
-      scene: this.scene,
-      registry: this.registry,
+      scene: this.patch.scenes[index]!,
+      registry,
       rng: this.rng,
       container: this.container,
       reducedMotion: this.reducedMotion,
@@ -107,7 +117,7 @@ export class Engine {
   /** Expose the arc macros as modulation SOURCE ports (arc.darkness, arc.density, …),
    *  evaluated at the current arc position each frame. Host-level (survives scene swaps),
    *  so the descent itself can drive params — e.g. tape hiss / pitch drift deepening. */
-  private registerArcPorts(): void {
+  private registerArcPorts(registry: SignalRegistry): void {
     const keys = [
       'darkness',
       'rhythmicWeight',
@@ -117,7 +127,7 @@ export class Engine {
       'density',
     ] as const;
     for (const key of keys) {
-      this.registry.addOutput(makePortRef('arc', key), {
+      registry.addOutput(makePortRef('arc', key), {
         kind: 'unipolar',
         read: () => macrosAt(this.patch.dna.arc, this.arcPosition)[key],
       });
@@ -146,47 +156,93 @@ export class Engine {
     return this.coveringScene(arc);
   }
 
-  /** Swap the active scene in place: tear down the current one + matrix, build the
-   *  next, and re-wire the matrix — while the host (transport, gesture, master bus)
-   *  keeps running. The visual switches immediately; the new scene's audio has a short
-   *  build latency (its reverb), so there is a brief audio gap a later crossfade will
-   *  smooth. One scene is live at a time, so ports never collide. */
-  private async swapScene(index: number): Promise<void> {
-    if (this.swapping || this.disposed || index === this.activeIndex) return;
+  /** Begin a crossfade to `index`: build the incoming scene into its own registry (so
+   *  its ports don't collide with the outgoing scene's, which stays matrix-driven), play
+   *  it silent + transparent, then let the frame loop ramp the two against each other. */
+  private async beginCrossfade(index: number): Promise<void> {
+    if (this.transitioning || this.disposed || index === this.activeIndex) return;
     if (index < 0 || index >= this.patch.scenes.length) return;
-    this.swapping = true;
-    try {
-      // fade the master down so the outgoing scene's reverb tail doesn't cut abruptly
-      if (this.masterBus) {
-        this.masterBus.gain.rampTo(0, 0.12);
-        await new Promise<void>((resolve) => setTimeout(resolve, 140));
-        if (this.disposed) return;
-      }
-      this.activeIndex = index;
-      this.matrix?.dispose();
-      this.matrix = null;
-      this.active?.dispose();
-      this.active = null;
-      // reset the registry to host-only ports, then build the incoming scene
-      this.registry.clear();
-      this.gesture?.registerPorts(this.registry);
-      this.registerArcPorts();
-      const next = this.makeScene();
-      this.active = next;
-      next.renderStill(this.arcPosition); // show the new world immediately
-      if (this.masterBus) {
-        await next.build(); // audio + its ports (async: reverb IR)
-        if (this.disposed) return;
-        next.output?.connect(this.masterBus);
-        this.matrix = new Matrix(this.routes, this.registry);
-        this.matrix.setup();
-        next.startComposer();
-        // bloom the new scene in rather than blasting it at full level
-        this.masterBus.gain.rampTo(1, 0.7);
-      }
-    } finally {
-      this.swapping = false;
+    this.transitioning = true;
+    this.incomingReady = false;
+    this.crossfadeElapsed = 0;
+    this.incomingIndex = index;
+    const dur = this.patch.scenes[index]!.transition.durationSec;
+    this.crossfadeDur = dur > 0 ? dur : 0.8;
+
+    const reg = new SignalRegistry();
+    this.gesture?.registerPorts(reg);
+    this.registerArcPorts(reg);
+    const incoming = this.makeScene(index, reg);
+    incoming.setOpacity(0); // starts hidden; blooms in as the crossfade advances
+    incoming.renderStill(this.arcPosition);
+    this.incoming = incoming;
+    this.incomingRegistry = reg;
+
+    if (!this.masterBus) {
+      this.incomingReady = true; // no audio yet — a visual-only fade
+      return;
     }
+    try {
+      await incoming.build(); // audio + its ports into `reg` (async: reverb IR)
+      if (this.disposed) return;
+      incoming.setLevel(0);
+      incoming.output?.connect(this.masterBus);
+      incoming.startComposer();
+      this.incomingReady = true; // the loop now animates the crossfade
+    } catch {
+      this.abortCrossfade();
+    }
+  }
+
+  /** Drive the in-flight crossfade by `dt` (called each frame once the incoming is
+   *  built). Equal-power audio, linear visual opacity; hand over at t≥1. */
+  private advanceCrossfade(dt: number): void {
+    if (!this.incoming || !this.incomingReady) return;
+    this.crossfadeElapsed += dt;
+    const t = this.crossfadeDur > 0 ? Math.min(1, this.crossfadeElapsed / this.crossfadeDur) : 1;
+    const quarter = (t * Math.PI) / 2;
+    this.active?.setLevel(Math.cos(quarter)); // equal-power: constant loudness mid-fade
+    this.incoming.setLevel(Math.sin(quarter));
+    this.active?.setOpacity(1 - t);
+    this.incoming.setOpacity(t);
+    if (t >= 1) this.completeCrossfade();
+  }
+
+  /** Hand over: dispose the outgoing scene + matrix, make the incoming's registry the
+   *  active one, and re-wire the matrix to the now-active scene's ports. */
+  private completeCrossfade(): void {
+    const incoming = this.incoming;
+    const reg = this.incomingRegistry;
+    if (!incoming || !reg) {
+      this.transitioning = false;
+      return;
+    }
+    this.matrix?.dispose();
+    this.active?.dispose();
+    this.active = incoming;
+    this.activeIndex = this.incomingIndex;
+    const oldReg = this.registry;
+    this.registry = reg;
+    oldReg.clear();
+    this.incoming = null;
+    this.incomingRegistry = null;
+    this.incomingReady = false;
+    this.transitioning = false;
+    this.active.setLevel(1);
+    this.active.setOpacity(1);
+    this.matrix = new Matrix(this.routes, this.registry);
+    this.matrix.setup();
+  }
+
+  /** Abandon an in-flight crossfade (build failure) — keep the outgoing scene. */
+  private abortCrossfade(): void {
+    this.incoming?.dispose();
+    this.incoming = null;
+    this.incomingRegistry = null;
+    this.incomingReady = false;
+    this.transitioning = false;
+    this.active?.setLevel(1);
+    this.active?.setOpacity(1);
   }
 
   /** Unlock audio (MUST be inside a user gesture), build the audio graph + matrix. */
@@ -198,10 +254,10 @@ export class Engine {
     }
     await unlockAudio();
     // The host owns the shared master bus; each scene feeds it through its own gain,
-    // so two scenes can be summed and crossfaded (§18.2). One scene wired today.
+    // so two scenes can be summed and crossfaded (§18.2).
     this.masterBus = new Tone.Gain(1);
     this.masterBus.connect(Tone.getDestination());
-    this.active ??= this.makeScene();
+    this.active ??= this.makeScene(this.activeIndex, this.registry);
     await this.active.build(); // builds the scene's audio + registers its ports
     this.active.output?.connect(this.masterBus); // scene → shared master → speakers
     this.matrix = new Matrix(this.routes, this.registry);
@@ -295,13 +351,18 @@ export class Engine {
       const dt = this.lastTs === 0 ? 0 : (ts - this.lastTs) / 1000;
       this.lastTs = ts;
       const pos = this.arcPosition;
-      if (this.autoScene && this.running && !this.swapping) {
+      // start a crossfade when the arc enters another scene's range
+      if (this.autoScene && this.running && !this.transitioning) {
         const target = this.sceneIndexForArc(pos);
-        if (target !== this.activeIndex) void this.swapScene(target);
+        if (target !== this.activeIndex) void this.beginCrossfade(target);
       }
+      this.advanceCrossfade(dt);
       this.active?.applyArc(pos);
+      this.incoming?.applyArc(pos);
       this.matrix?.evaluateControl(dt);
-      this.active?.render(this.reducedMotion ? 0 : this.transport.seconds, dt);
+      const time = this.reducedMotion ? 0 : this.transport.seconds;
+      this.active?.render(time, dt);
+      this.incoming?.render(time, dt);
       this.rafId = requestAnimationFrame(tick);
     };
     this.rafId = requestAnimationFrame(tick);
@@ -324,6 +385,7 @@ export class Engine {
     this.transport.stop();
     this.matrix?.dispose();
     this.active?.dispose();
+    this.incoming?.dispose();
     this.masterBus?.dispose();
     this.gesture?.dispose();
     this.registry.clear();
