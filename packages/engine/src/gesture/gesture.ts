@@ -44,7 +44,7 @@ export class GestureController {
 
   private readonly onWheel = (e: WheelEvent): void => {
     e.preventDefault();
-    this.zoom = clamp01(this.zoom - e.deltaY * 0.0012); // scroll up = descend
+    this.zoom = clamp01(this.zoom - e.deltaY * 0.002); // scroll up = descend
   };
   private readonly onPointerDown = (e: PointerEvent): void => {
     this.dragging = true;
@@ -59,7 +59,7 @@ export class GestureController {
     if (this.dragging) {
       const dy = e.clientY - this.lastY;
       this.lastY = e.clientY;
-      this.zoom = clamp01(this.zoom + dy * 0.003); // drag down = descend
+      this.zoom = clamp01(this.zoom + dy * 0.005); // drag down = descend
     }
   };
   private readonly onPointerUp = (): void => {
@@ -72,7 +72,7 @@ export class GestureController {
       const b = e.touches[1]!;
       const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
       if (this.pinchDist !== null) {
-        this.zoom = clamp01(this.zoom + (dist - this.pinchDist) * 0.002); // pinch out = descend
+        this.zoom = clamp01(this.zoom + (dist - this.pinchDist) * 0.004); // pinch out = descend
       }
       this.pinchDist = dist;
     }
