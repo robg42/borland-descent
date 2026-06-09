@@ -32,6 +32,7 @@ export class Engine {
   readonly patch: Patch;
   private activeIndex: number;
   private readonly autoScene: boolean;
+  private readonly onSceneChange?: (scene: Scene) => void;
   private registry = new SignalRegistry();
   private readonly transport = new Transport();
   private readonly rng: Rng;
@@ -68,6 +69,7 @@ export class Engine {
     if (opts.patch.scenes.length === 0) throw new Error('Patch has no scenes');
     this.container = opts.container;
     this.autoScene = opts.autoScene ?? false;
+    this.onSceneChange = opts.onSceneChange;
     this.routes = opts.patch.modulationMatrix;
     this.rng = new Rng(opts.patch.meta.seed);
     this.manualArc = Math.min(1, Math.max(0, opts.initialArc ?? 0));
@@ -177,6 +179,7 @@ export class Engine {
     incoming.renderStill(this.arcPosition);
     this.incoming = incoming;
     this.incomingRegistry = reg;
+    this.onSceneChange?.(this.patch.scenes[index]!); // announce the scene being entered
 
     if (!this.masterBus) {
       this.incomingReady = true; // no audio yet — a visual-only fade
@@ -264,6 +267,7 @@ export class Engine {
     this.matrix.setup();
     this.transport.start();
     this.active.startComposer();
+    this.onSceneChange?.(this.scene);
     this.running = true;
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', this.onVisibilityChange);

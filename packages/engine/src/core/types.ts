@@ -1,4 +1,4 @@
-import type { Patch } from '../patch/types';
+import type { Patch, Scene } from '../patch/types';
 
 export interface EngineOptions {
   /** The validated patch the engine renders. */
@@ -14,6 +14,8 @@ export interface EngineOptions {
   /** Drive scene selection from the arc position (the player). The studio leaves this
    *  off and selects scenes manually. */
   autoScene?: boolean;
+  /** Called when the active scene changes — the player fades in the scene's name. */
+  onSceneChange?: (scene: Scene) => void;
 }
 
 export interface Disposable {

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Engine, type Patch } from '@borland/engine';
+import { Engine, type Patch, type Scene } from '@borland/engine';
 
 interface EngineBuildOpts {
   sceneIndex?: number;
   initialArc?: number;
   autoScene?: boolean;
+  onSceneChange?: (scene: Scene) => void;
 }
 
 /**
@@ -36,6 +37,7 @@ export function useEngine(
       sceneIndex: optsRef.current?.sceneIndex,
       initialArc: optsRef.current?.initialArc,
       autoScene: optsRef.current?.autoScene,
+      onSceneChange: optsRef.current?.onSceneChange,
     });
     setEngine(instance);
     return () => {
