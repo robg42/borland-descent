@@ -22,6 +22,8 @@ export interface NoteDecision {
   midi: number;
   durationSteps: number;
   velocity: number;
+  /** Laid-back timing humanisation (seconds), added at scheduling. Small & positive. */
+  timeOffsetSec: number;
 }
 
 export function initComposerState(): ComposerState {
@@ -30,6 +32,18 @@ export function initComposerState(): ComposerState {
 
 const PAD_OCTAVE_BASE = 60;
 const DUR_CHOICES = [2, 3, 4, 6];
+
+/**
+ * Deterministic [0,1) jitter from an integer step — humanises timing and velocity
+ * WITHOUT drawing from the seeded compositional RNG, so the note stream itself is
+ * unchanged (same melody and rhythm, just a looser feel). Boards of Canada sits a hair
+ * behind the grid, so callers use it for small, always-positive offsets — laid-back,
+ * never early, which also keeps scheduling safely in the transport's future.
+ */
+function jitter(step: number): number {
+  const x = Math.sin(step * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
 
 export function decideStep(args: {
   dna: Dna;
@@ -52,7 +66,8 @@ export function decideStep(args: {
       voice: 'bass',
       midi: scene.bass.register + pc,
       durationSteps: barSteps,
-      velocity: 0.85,
+      velocity: 0.8 + jitter(state.step * 7 + 1) * 0.12,
+      timeOffsetSec: jitter(state.step * 7 + 2) * 0.008, // bass stays tight to the bar
     });
   }
 
@@ -67,7 +82,13 @@ export function decideStep(args: {
     const midi = degreeToMidi(degree, scale, dna.keyCentre, PAD_OCTAVE_BASE);
     const durationSteps = DUR_CHOICES[rng.int(0, DUR_CHOICES.length - 1)] ?? 3;
     const velocity = 0.4 + rng.float() * 0.3;
-    out.push({ voice: 'pad', midi, durationSteps, velocity });
+    out.push({
+      voice: 'pad',
+      midi,
+      durationSteps,
+      velocity,
+      timeOffsetSec: jitter(state.step * 13 + 5) * 0.025, // pad drags a touch, laid-back
+    });
     state.degree = degree;
     state.motifIndex++;
     state.lastPadStep = state.step;

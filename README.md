@@ -7,7 +7,7 @@ pushed darker, more personal, more immersive, and bidirectional.
 
 This repository is **v1: the creative loop** — the smallest thing that lets us
 compose and design real scene content and immediately hear and see it change. It is
-not the whole platform (no backend, auth, transitions, or full seven-scene arc yet);
+not the whole platform (no backend, auth, or crossfade transitions between scenes yet);
 those are sequenced for later behind clean seams.
 
 > Architecture, scope and decisions live in `CLAUDE.md` and the build plan. The two

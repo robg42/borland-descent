@@ -50,6 +50,8 @@ export class TapeWarmth {
     this.setParam('flutterDepth', num(this.params.flutterDepth, 0.15));
     this.setParam('flutterRate', num(this.params.flutterRate, 4));
     this.setParam('hfCutoff', num(this.params.hfCutoff, 7000));
+    this.setParam('hiss', num(this.params.hiss, 0.0015));
+    this.setParam('crush', num(this.params.crush, 12));
   }
 
   private getParam(name: string): AudioParam | undefined {
@@ -98,6 +100,32 @@ export class TapeWarmth {
           flutter.value = clamp(v, 0, 0.6);
         },
         audioTarget: flutter,
+      });
+    }
+    const hiss = this.getParam('hiss');
+    if (hiss) {
+      registry.addInput(makePortRef(nodeId, 'hiss'), {
+        kind: 'unipolar',
+        base: hiss.value,
+        min: 0,
+        max: 0.05,
+        write: (v) => {
+          hiss.value = clamp(v, 0, 0.05);
+        },
+        audioTarget: hiss,
+      });
+    }
+    const crush = this.getParam('crush');
+    if (crush) {
+      registry.addInput(makePortRef(nodeId, 'crush'), {
+        kind: 'scalar',
+        base: crush.value,
+        min: 4,
+        max: 16,
+        write: (v) => {
+          crush.value = clamp(v, 4, 16);
+        },
+        audioTarget: crush,
       });
     }
   }

@@ -5,7 +5,8 @@ import { Transport } from './transport';
 import { unlockAudio, resumeAudio, isAudioRunning } from '../audio/context';
 import { SignalRegistry, type InputPortInfo, type OutputPortInfo } from './registry';
 import { Rng } from './rng';
-import { parsePortRef, type PortRef } from './ports';
+import { makePortRef, parsePortRef, type PortRef } from './ports';
+import { macrosAt } from './arc';
 import { Matrix, restoreDroppedControlTargets } from '../modulation/matrix';
 import { GestureController } from '../gesture/gesture';
 import { SceneInstance } from './sceneInstance';
@@ -72,6 +73,11 @@ export class Engine {
     const [minBpm, maxBpm] = this.patch.dna.tempoRange;
     this.transport.setBpm((minBpm + maxBpm) / 2);
 
+    // The arc position is itself a modulation SOURCE (arc.darkness, …), read live each
+    // frame — so routes can drive anything from the descent (e.g. degradation deepening).
+    // Host-level: re-registered after every scene swap (which clears the registry).
+    this.registerArcPorts();
+
     if (opts.container) {
       this.gesture = new GestureController(opts.container);
       this.gesture.setArcPosition(this.manualArc); // preserve arc across a scene rebuild
@@ -96,6 +102,26 @@ export class Engine {
       container: this.container,
       reducedMotion: this.reducedMotion,
     });
+  }
+
+  /** Expose the arc macros as modulation SOURCE ports (arc.darkness, arc.density, …),
+   *  evaluated at the current arc position each frame. Host-level (survives scene swaps),
+   *  so the descent itself can drive params — e.g. tape hiss / pitch drift deepening. */
+  private registerArcPorts(): void {
+    const keys = [
+      'darkness',
+      'rhythmicWeight',
+      'reverbSize',
+      'filterPosition',
+      'dissonance',
+      'density',
+    ] as const;
+    for (const key of keys) {
+      this.registry.addOutput(makePortRef('arc', key), {
+        kind: 'unipolar',
+        read: () => macrosAt(this.patch.dna.arc, this.arcPosition)[key],
+      });
+    }
   }
 
   /** The scene whose arcRange covers `arc` (clamped to the ends if none does). */
@@ -138,6 +164,7 @@ export class Engine {
       // reset the registry to host-only ports, then build the incoming scene
       this.registry.clear();
       this.gesture?.registerPorts(this.registry);
+      this.registerArcPorts();
       const next = this.makeScene();
       this.active = next;
       next.renderStill(this.arcPosition); // show the new world immediately

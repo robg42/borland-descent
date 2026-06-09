@@ -349,6 +349,7 @@
   .ledger__row:last-child { border-bottom: 1px solid var(--hair); }
   .ledger__what { color: #f3f7fa; font-weight: 600; }
   .tag-defer { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber); border: 1px solid rgba(227,176,103,0.4); border-radius: 2px; padding: 0.1rem 0.4rem; margin-left: 0.5rem; white-space: nowrap; }
+  .tag-done { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--teal); border: 1px solid rgba(89,219,214,0.4); border-radius: 2px; padding: 0.1rem 0.4rem; margin-left: 0.5rem; white-space: nowrap; }
   .ledger__seam { color: var(--ink-soft); font-size: 0.95rem; }
   .ledger__seam b { color: var(--accent); font-weight: 500; }
 
@@ -478,7 +479,7 @@
         <div><b>Author</b><span>Rob</span></div>
         <div><b>Reader</b><span>Ian</span></div>
         <div><b>Scope</b><span>v1 · the loop</span></div>
-        <div><b>Updated</b><span>8 Jun 2026</span></div>
+        <div><b>Updated</b><span>9 Jun 2026</span></div>
       </div>
     </div>
     <div class="masthead__cue"><span class="arrow">↓</span> scroll to descend</div>
@@ -764,15 +765,15 @@
           <div class="ledger__seam">The Patch schema <b>already models a <code>SceneTransition</code></b> (crossfade / morph / none, with duration), and the runtime now has the unit it needs: the engine hosts a self-contained <b><code>SceneInstance</code></b>. A crossfade becomes the host holding a second instance and ramping a blend — not a re-plumb.</div>
         </div>
         <div class="ledger__row">
-          <div class="ledger__what">Continuous handoff across the seven-scene arc <span class="tag-defer">deferred</span></div>
-          <div class="ledger__seam">The seven scenes are now <b>authored</b> — each a distinct synth + shader module tiling its <b><code>arcRange</code></b> slice from surface to trench, any one auditioned live in the studio. Going from two to seven was just authored content, exactly as planned. What remains is the engine <em>handing off</em> from one scene to the next as you scrub — the same <code>SceneInstance</code> seam as transitions above.</div>
+          <div class="ledger__what">The seven-scene arc, played end-to-end <span class="tag-done">shipped</span></div>
+          <div class="ledger__seam">The seven scenes are <b>authored</b> — each a distinct synth + shader module tiling its <b><code>arcRange</code></b> slice from surface to trench — and <b>§18.1 arc-driven traversal</b> now plays them: in the player the arc position selects the scene, swapping the active <code>SceneInstance</code> in place as you descend (one scene live at a time, so ports never collide; the studio keeps manual selection). The one rough edge — a brief gap while the next scene's reverb builds — is what the boundary <em>crossfade</em> above smooths next.</div>
         </div>
         <div class="ledger__row">
           <div class="ledger__what">Accounts, hosting, sharing <span class="tag-defer">deferred</span></div>
           <div class="ledger__seam">Because the engine is <b>framework-agnostic</b> and the output is a <b>static build</b>, the player hosts as plain static assets with an SPA fallback, and auth can wrap the studio later without touching the engine.</div>
         </div>
       </div>
-      <p>The thread running through all four: <strong>the constraints in §3 are what make the omissions safe.</strong> A single source of truth, a clean engine boundary and a persistence seam are precisely the things that turn “we'll add it later” from a hope into a plan.</p>
+      <p>The thread running through all four: <strong>the constraints in §3 are what make the omissions safe.</strong> A single source of truth, a clean engine boundary and a persistence seam are precisely the things that turn “we'll add it later” from a hope into a plan — and the seven-scene arc, now playing for real with the modulation matrix and Patch schema untouched, is the first of them to prove the seam holds.</p>
     </section>
 
     <!-- 07 -->
@@ -811,7 +812,7 @@
         </div>
       </div>
 
-      <p>The single zoom gesture (drag, scroll or pinch on the preview) moves you through the arc; the world changes because you touched it, not because you found a dial. Five modulation routes wire the two domains together — note especially that they run <em>both</em> ways:</p>
+      <p>The single zoom gesture (drag, scroll or pinch on the preview) moves you through the arc; the world changes because you touched it, not because you found a dial. Seven modulation routes wire the domains together — note they run <em>both</em> ways, and that the arc position is itself a source (its macros are output ports), so the tape degradation — pitch drift and hiss — deepens as you descend:</p>
 
       <table class="routes">
         <thead><tr><th>Source</th><th>Target</th><th>Curve</th><th>Direction · rate</th></tr></thead>
@@ -820,6 +821,8 @@
           <tr><td><code>bassMeter.level</code></td><td><code>field.fog</code></td><td>sCurve</td><td class="dir">audio → visual · control</td></tr>
           <tr><td><code>fft.low</code></td><td><code>field.flow</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
           <tr><td><code>masterMeter.level</code></td><td><code>bloom.strength</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>arc.darkness</code></td><td><code>drift.depth</code></td><td>linear</td><td class="dir">arc → audio · control</td></tr>
+          <tr><td><code>arc.darkness</code></td><td><code>tape.hiss</code></td><td>linear</td><td class="dir">arc → audio · control</td></tr>
           <tr class="r-audio"><td><code>wobble.out</code></td><td><code>voices.cutoff</code></td><td>linear</td><td class="dir">LFO → audio · audio-rate</td></tr>
         </tbody>
       </table>

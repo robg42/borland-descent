@@ -36,7 +36,7 @@ export class Composer {
       const stepSec = Tone.Time(interval).toSeconds();
       for (const d of decisions) {
         const synth = d.voice === 'bass' ? this.bass : this.pad;
-        synth.trigger(d.midi, d.durationSteps * stepSec, time, d.velocity);
+        synth.trigger(d.midi, d.durationSteps * stepSec, time + d.timeOffsetSec, d.velocity);
       }
     }, interval).start(0);
   }

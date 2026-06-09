@@ -31,9 +31,16 @@ export class AudioEngine {
   private readonly bass: SynthModule;
   private readonly composer: Composer;
   private reverb: Tone.Reverb | null = null;
+  private reverbHP: Tone.Filter | null = null;
   private tape: TapeWarmth | null = null;
   private lfo: Tone.LFO | null = null;
   private drift: Tone.Vibrato | null = null;
+  private padDry: Tone.Gain | null = null;
+  private glue: Tone.Compressor | null = null;
+  private limiter: Tone.Limiter | null = null;
+  private shimmer: Tone.PitchShift | null = null;
+  private shimmerReverb: Tone.Reverb | null = null;
+  private shimmerOut: Tone.Gain | null = null;
   private disposed = false;
 
   constructor(
@@ -50,8 +57,20 @@ export class AudioEngine {
   /** Build the graph. Async: the reverb IR and the worklet module load here. */
   async build(): Promise<void> {
     const reverbSize = this.scene.audioParams.reverbSize;
-    this.reverb = new Tone.Reverb({ decay: 1.5 + reverbSize * 9, preDelay: 0.02, wet: 1 });
+    // A warmer, more intimate space than a ~9-second cathedral (Boards-of-Canada rooms
+    // breathe, they don't boom); the tape downstream darkens and modulates the tail.
+    this.reverb = new Tone.Reverb({
+      decay: 1.4 + reverbSize * 7,
+      preDelay: 0.012 + reverbSize * 0.03,
+      wet: 1,
+    });
     await this.reverb.ready;
+
+    // Shimmer's own reverb blooms the octave-up signal; built async like the main one.
+    const shimmerParams = nodeParams(this.patch, 'shimmer');
+    const shimmerReverb = new Tone.Reverb({ decay: num(shimmerParams.decay, 5), wet: 1 });
+    this.shimmerReverb = shimmerReverb;
+    await shimmerReverb.ready;
 
     try {
       this.tape = new TapeWarmth(nodeParams(this.patch, 'tape'));
@@ -72,10 +91,17 @@ export class AudioEngine {
       type: 'sine',
     });
 
-    // Wet chain: pad → drift → wetBus → reverb → [tape] → master
+    // High-pass the reverb SEND so lows stay out of the long tail (clarity, no mud) —
+    // the dry sub owns the bottom. Wet chain: pad → drift → wetBus → HP → reverb → [tape] → master.
+    this.reverbHP = new Tone.Filter({
+      type: 'highpass',
+      frequency: num(nodeParams(this.patch, 'reverbHP').frequency, 280),
+      Q: 0.5,
+    });
     this.pad.output.connect(this.drift);
     this.drift.connect(this.wetBus);
-    this.wetBus.connect(this.reverb);
+    this.wetBus.connect(this.reverbHP);
+    this.reverbHP.connect(this.reverb);
     if (this.tape) {
       this.reverb.connect(this.tape.input);
       this.tape.output.connect(this.master);
@@ -83,12 +109,51 @@ export class AudioEngine {
       this.reverb.connect(this.master);
     }
 
+    // A little DRY pad in parallel gives the voices presence and definition under the
+    // wash (they were 100% wet before — distant and undefined). Clean, stable-pitched.
+    this.padDry = new Tone.Gain(num(nodeParams(this.patch, 'padDry').gain, 0.32));
+    this.pad.output.connect(this.padDry);
+    this.padDry.connect(this.master);
+
+    // Shimmer send — an octave-up pitch-shifted feedback bloom off the voices, smoothed
+    // by its own reverb: the ascending AWVFTS/Cocteau sheen. Parallel into the master so
+    // the glue + limiter catch it; kept clean (no tape) to stay ethereal.
+    const shimmer = new Tone.PitchShift({
+      pitch: num(shimmerParams.pitch, 12),
+      windowSize: num(shimmerParams.windowSize, 0.1),
+      feedback: num(shimmerParams.feedback, 0.35),
+      wet: 1,
+    });
+    const shimmerOut = new Tone.Gain(num(shimmerParams.level, 0.22));
+    this.shimmer = shimmer;
+    this.shimmerOut = shimmerOut;
+    this.wetBus.connect(shimmer);
+    shimmer.connect(shimmerReverb);
+    shimmerReverb.connect(shimmerOut);
+    shimmerOut.connect(this.master);
+
     // Dry chain: bass → dryBus → master
     this.bass.output.connect(this.dryBus);
     this.dryBus.connect(this.master);
 
-    // Analyser taps. The master is exposed as `output` and routed to the shared host
-    // master bus by the Engine, so scenes can be summed and crossfaded (§18.2 seam).
+    // Master spine: gentle glue compression for cohesion, then a brick-wall limiter as a
+    // safe ceiling (nothing else caps peaks). One scene plays today, so this per-scene
+    // master IS the final master; when crossfades land (§18.2) the limiter moves to the
+    // host's shared master bus so two summed scenes can't exceed it.
+    const glueParams = nodeParams(this.patch, 'glue');
+    this.glue = new Tone.Compressor({
+      threshold: num(glueParams.threshold, -18),
+      ratio: num(glueParams.ratio, 2),
+      attack: num(glueParams.attack, 0.03),
+      release: num(glueParams.release, 0.25),
+      knee: 8,
+    });
+    this.limiter = new Tone.Limiter(num(nodeParams(this.patch, 'limiter').threshold, -1));
+    this.master.connect(this.glue);
+    this.glue.connect(this.limiter);
+
+    // Analyser taps sit on the PRE-glue master, so audio→visual modulation tracks the
+    // mix itself rather than the limiter's gain reduction.
     this.master.connect(this.analysers.masterMeter);
     this.master.connect(this.analysers.fft);
     this.bass.output.connect(this.analysers.bassMeter);
@@ -120,6 +185,60 @@ export class AudioEngine {
       },
       audioTarget: this.master.gain,
     });
+
+    if (this.padDry) {
+      const padDry = this.padDry;
+      this.registry.addInput(makePortRef('padDry', 'gain'), {
+        kind: 'unipolar',
+        base: padDry.gain.value,
+        min: 0,
+        max: 1.5,
+        write: (v) => {
+          padDry.gain.value = clamp(v, 0, 1.5);
+        },
+        audioTarget: padDry.gain,
+      });
+    }
+    if (this.reverbHP) {
+      const hp = this.reverbHP;
+      this.registry.addInput(makePortRef('reverbHP', 'frequency'), {
+        kind: 'scalar',
+        base: num(nodeParams(this.patch, 'reverbHP').frequency, 280),
+        min: 20,
+        max: 2000,
+        write: (v) => {
+          hp.frequency.value = clamp(v, 20, 2000);
+        },
+        audioTarget: hp.frequency,
+      });
+    }
+
+    if (this.shimmerOut) {
+      const shimmerOut = this.shimmerOut;
+      this.registry.addInput(makePortRef('shimmer', 'level'), {
+        kind: 'unipolar',
+        base: shimmerOut.gain.value,
+        min: 0,
+        max: 1.5,
+        write: (v) => {
+          shimmerOut.gain.value = clamp(v, 0, 1.5);
+        },
+        audioTarget: shimmerOut.gain,
+      });
+    }
+    if (this.shimmer) {
+      const shimmer = this.shimmer;
+      this.registry.addInput(makePortRef('shimmer', 'feedback'), {
+        kind: 'unipolar',
+        base: shimmer.feedback.value,
+        min: 0,
+        max: 0.9,
+        write: (v) => {
+          shimmer.feedback.value = clamp(v, 0, 0.9);
+        },
+        audioTarget: shimmer.feedback,
+      });
+    }
 
     this.registry.addOutput(makePortRef('masterMeter', 'level'), {
       kind: 'unipolar',
@@ -175,9 +294,10 @@ export class AudioEngine {
     this.composer.density = m.density;
   }
 
-  /** The scene's mixed audio output — the host routes this into the shared master. */
+  /** The scene's mixed audio output (post glue + limiter) — the host routes this into
+   *  the shared master. Falls back to the raw master before build() wires the spine. */
   get output(): Tone.ToneAudioNode {
-    return this.master;
+    return this.limiter ?? this.master;
   }
 
   dispose(): void {
@@ -189,7 +309,14 @@ export class AudioEngine {
     this.bass.dispose();
     this.tape?.dispose();
     this.drift?.dispose();
+    this.reverbHP?.dispose();
     this.reverb?.dispose();
+    this.shimmer?.dispose();
+    this.shimmerReverb?.dispose();
+    this.shimmerOut?.dispose();
+    this.padDry?.dispose();
+    this.glue?.dispose();
+    this.limiter?.dispose();
     this.wetBus.dispose();
     this.dryBus.dispose();
     this.master.dispose();
