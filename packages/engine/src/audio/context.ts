@@ -1,12 +1,31 @@
 import * as Tone from 'tone';
 
 /**
- * One shared AudioContext for the whole page (Safari caps ~4 per page). Tone owns
- * it — we never `new AudioContext()` alongside. It must be unlocked from a user
- * gesture, and on iOS may need re-unlocking after backgrounding ("tap to resume").
+ * One shared AudioContext for the whole page (Safari caps ~4 per page). Tone owns it —
+ * we never `new AudioContext()` alongside. It must be unlocked from a user gesture, and
+ * on iOS may need re-unlocking after backgrounding ("tap to resume").
  */
 export async function unlockAudio(): Promise<void> {
-  await Tone.start();
+  await Tone.start(); // resume Tone's context inside the user gesture
+  const ctx = Tone.getContext();
+  if (ctx.state !== 'running') {
+    try {
+      await ctx.resume();
+    } catch {
+      /* iOS can refuse outside a gesture; the player offers a tap-to-resume */
+    }
+  }
+  // Some iOS versions need an actual sound played within the gesture to open the audio
+  // output — resume() alone is not enough. A one-sample silent buffer primes it.
+  try {
+    const raw = ctx.rawContext as unknown as AudioContext;
+    const source = raw.createBufferSource();
+    source.buffer = raw.createBuffer(1, 1, raw.sampleRate);
+    source.connect(raw.destination);
+    source.start(0);
+  } catch {
+    /* best-effort: not all contexts expose the raw node API */
+  }
 }
 
 /** Raw context state: 'suspended' | 'running' | 'closed' | 'interrupted' (iOS). */
