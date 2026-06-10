@@ -3,7 +3,7 @@ import { clamp } from '../../core/curves';
 import { makePortRef } from '../../core/ports';
 import type { SignalRegistry } from '../../core/registry';
 import type { Scalar } from '../../patch/schema';
-import { numParam, type SynthModule, type SynthOptions } from './types';
+import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from './types';
 
 const CUTOFF_MIN = 80;
 const CUTOFF_MAX = 6000;
@@ -65,6 +65,33 @@ export function createPressureDrone(opts?: SynthOptions): SynthModule {
           out.gain.value = clamp(v, 0, 1.5);
         },
         audioTarget: out.gain,
+      });
+
+      registerAdsrPorts(
+        nodeId,
+        registry,
+        params,
+        { attack: 1.4, decay: 1.2, sustain: 0.65, release: 4.0 },
+        (env) => poly.set({ envelope: env }),
+      );
+
+      const baseFilterOct = numParam(params, 'filterOctaves', 3.2);
+      poly.set({ filterEnvelope: { octaves: baseFilterOct } });
+      registry.addInput(makePortRef(nodeId, 'filterOctaves'), {
+        kind: 'scalar',
+        base: baseFilterOct,
+        min: 0,
+        max: 6,
+        write: (v) => poly.set({ filterEnvelope: { octaves: clamp(v, 0, 6) } }),
+      });
+      const baseWidth = numParam(params, 'width', 0.3);
+      poly.set({ oscillator: { type: 'pulse', width: baseWidth } });
+      registry.addInput(makePortRef(nodeId, 'width'), {
+        kind: 'unipolar',
+        base: baseWidth,
+        min: 0,
+        max: 1,
+        write: (v) => poly.set({ oscillator: { type: 'pulse', width: clamp(v, 0, 1) } }),
       });
     },
     dispose() {

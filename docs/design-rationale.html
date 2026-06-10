@@ -634,6 +634,8 @@
           <dd>In v1, <code>save</code> deliberately throws: you export from the studio and commit the file. Slightly manual, but it means “saving” is a git commit with full history and review — exactly right for a two-person collaboration today.</dd>
           <dt>Enforced by</dt>
           <dd>Nothing in the engine or studio imports a concrete store; they depend on the <code>PatchStore</code> interface in <code>patch/store.ts</code>.</dd>
+          <dt>User samples</dt>
+          <dd>The same seam shape covers user-loaded samples. The Patch references a sample by id (<code>node.sampleId</code>); the audio binary lives in a runtime <code>SampleStore</code> (an in-memory cache over IndexedDB today; a backend later) — never in the JSON. A deliberate carve-out from “the document contains everything”: embedding binary audio as base64 would bloat the patch and defeat lossless text round-tripping, so the JSON stays small and an <em>export-with-samples</em> bundle is the sharing follow-on. The same id-by-reference rule covers a convolution reverb's impulse response (<code>node.ir</code> → an IR WAV such as an Open AIR cathedral); a generated hall IR is synthesised when none is set, so the patch alone always renders.</dd>
         </dl>
       </div>
 

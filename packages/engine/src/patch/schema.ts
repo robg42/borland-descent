@@ -74,6 +74,12 @@ export const AudioNodeSchema = z.object({
   kind: z.enum(['master', 'bus', 'synthModule', 'composer', 'effect', 'analyser', 'lfo']),
   moduleId: z.string().optional(),
   params: z.record(z.string(), scalar).default({}),
+  // For sampler voices: the user-loaded sample this node plays. Only an id reference —
+  // the audio binary lives in the runtime SampleStore (IndexedDB), never in the JSON.
+  sampleId: z.string().optional(),
+  // For a convolution-reverb node: a URL/path to a real impulse response (e.g. an Open
+  // AIR cathedral WAV). Loaded into Tone.Convolver; absent → a generated hall IR is used.
+  ir: z.string().optional(),
 });
 export const AudioConnectionSchema = z.object({
   from: idSchema,

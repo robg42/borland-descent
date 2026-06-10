@@ -3,7 +3,7 @@ import { clamp } from '../../core/curves';
 import { makePortRef } from '../../core/ports';
 import type { SignalRegistry } from '../../core/registry';
 import type { Scalar } from '../../patch/schema';
-import { numParam, type SynthModule, type SynthOptions } from './types';
+import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from './types';
 
 const CUTOFF_MIN = 60;
 const CUTOFF_MAX = 7000;
@@ -75,6 +75,33 @@ export function createLeviathan(opts?: SynthOptions): SynthModule {
         kind: 'bipolar',
         base: baseDetune,
         write: (v) => poly.set({ detune: clamp(v, -1200, 1200) }),
+      });
+
+      registerAdsrPorts(
+        nodeId,
+        registry,
+        params,
+        { attack: 2.5, decay: 1.0, sustain: 0.8, release: 5.0 },
+        (env) => poly.set({ voice0: { envelope: env }, voice1: { envelope: env } }),
+      );
+
+      const baseHarmonicity = numParam(params, 'harmonicity', 0.5);
+      poly.set({ harmonicity: baseHarmonicity });
+      registry.addInput(makePortRef(nodeId, 'harmonicity'), {
+        kind: 'scalar',
+        base: baseHarmonicity,
+        min: 0.25,
+        max: 4,
+        write: (v) => poly.set({ harmonicity: clamp(v, 0.25, 4) }),
+      });
+      const baseVibrato = numParam(params, 'vibratoAmount', 0.18);
+      poly.set({ vibratoAmount: baseVibrato });
+      registry.addInput(makePortRef(nodeId, 'vibratoAmount'), {
+        kind: 'unipolar',
+        base: baseVibrato,
+        min: 0,
+        max: 1,
+        write: (v) => poly.set({ vibratoAmount: clamp(v, 0, 1) }),
       });
     },
     dispose() {

@@ -15,6 +15,8 @@ export interface ComposerState {
   motifIndex: number;
   degree: number;
   lastPadStep: number;
+  /** Free-step of each pad note still sounding (incl. its release tail) — the voice budget. */
+  activePad: number[];
 }
 
 export interface NoteDecision {
@@ -27,11 +29,14 @@ export interface NoteDecision {
 }
 
 export function initComposerState(): ComposerState {
-  return { step: 0, motifIndex: 0, degree: 0, lastPadStep: -999 };
+  return { step: 0, motifIndex: 0, degree: 0, lastPadStep: -999, activePad: [] };
 }
 
 const PAD_OCTAVE_BASE = 60;
 const DUR_CHOICES = [2, 3, 4, 6];
+// Estimated release tail (steps) a pad note keeps sounding after its duration, so the
+// voice budget counts notes still ringing — tuned for the typical ~4–5 s ambient releases.
+const PAD_TAIL_STEPS = 10;
 
 /**
  * Deterministic [0,1) jitter from an integer step — humanises timing and velocity
@@ -71,9 +76,18 @@ export function decideStep(args: {
     });
   }
 
-  // Pad: probabilistic on density, gated by minGapSteps, walking the DNA motif.
+  // Pad: probabilistic on density, gated by minGapSteps AND a polyphony budget — don't
+  // generate more overlapping notes than the voice can hold (this is what was causing
+  // "Max polyphony exceeded. Note dropped." and the audible cut-offs), while keeping the
+  // long ambient releases. Walks the DNA motif.
+  state.activePad = state.activePad.filter((free) => free > state.step);
+  const maxPad = Math.max(1, scene.voices.maxPolyphony);
   const gap = state.step - state.lastPadStep;
-  if (gap >= scene.rhythm.minGapSteps && rng.chance(0.25 + 0.6 * dens)) {
+  if (
+    gap >= scene.rhythm.minGapSteps &&
+    state.activePad.length < maxPad &&
+    rng.chance(0.25 + 0.6 * dens)
+  ) {
     const motif = dna.motif.intervals;
     const stepInterval = motif.length > 0 ? (motif[state.motifIndex % motif.length] ?? 0) : 0;
     let degree = state.degree + stepInterval;
@@ -92,6 +106,7 @@ export function decideStep(args: {
     state.degree = degree;
     state.motifIndex++;
     state.lastPadStep = state.step;
+    state.activePad.push(state.step + durationSteps + PAD_TAIL_STEPS);
   }
 
   state.step++;

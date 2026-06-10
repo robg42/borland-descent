@@ -32,6 +32,8 @@ class TapeWarmthProcessor extends AudioWorkletProcessor {
     // L/R phase offsets decorrelate the wow & flutter — the wide, drifting edge of real
     // tape. Left sits at 0; right is shifted by ~a third of a cycle.
     this.chOffset = [0, 0.37];
+    // previous input per channel — for 2× oversampling the saturation (anti-aliasing)
+    this.satPrev = [0, 0];
   }
 
   process(inputs, outputs, params) {
@@ -68,8 +70,11 @@ class TapeWarmthProcessor extends AudioWorkletProcessor {
         const inCh = input ? (input[ch] ?? input[0]) : undefined; // mono feeds both sides
         const x = inCh ? (inCh[i] ?? 0) : 0;
 
-        // 1. soft saturation
-        const s = Math.tanh(drive * x);
+        // 1. soft saturation, 2x oversampled to tame aliasing: linear-interp upsample →
+        // tanh on both points → 2-tap average downsample (cheap, and the drive is gentle).
+        const xPrev = this.satPrev[ch] ?? 0;
+        const s = 0.5 * (Math.tanh(drive * 0.5 * (xPrev + x)) + Math.tanh(drive * x));
+        this.satPrev[ch] = x;
 
         // 2. wow & flutter — modulated fractional delay, decorrelated per channel, with
         // a slow second wow so the drift wanders rather than cycles.

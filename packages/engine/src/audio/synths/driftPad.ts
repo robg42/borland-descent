@@ -3,7 +3,7 @@ import { clamp } from '../../core/curves';
 import { makePortRef } from '../../core/ports';
 import type { SignalRegistry } from '../../core/registry';
 import type { Scalar } from '../../patch/schema';
-import { numParam, type SynthModule, type SynthOptions } from './types';
+import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from './types';
 
 const CUTOFF_MIN = 80;
 const CUTOFF_MAX = 12000;
@@ -81,6 +81,24 @@ export function createDriftPad(opts?: SynthOptions): SynthModule {
         kind: 'bipolar',
         base: baseDetune,
         write: (v) => poly.set({ detune: clamp(v, -1200, 1200) }),
+      });
+
+      registerAdsrPorts(
+        nodeId,
+        registry,
+        params,
+        { attack: 1.6, decay: 1.0, sustain: 0.8, release: 5 },
+        (env) => poly.set({ envelope: env }),
+      );
+
+      const baseFilterOct = numParam(params, 'filterOctaves', 3.2);
+      poly.set({ filterEnvelope: { octaves: baseFilterOct } });
+      registry.addInput(makePortRef(nodeId, 'filterOctaves'), {
+        kind: 'scalar',
+        base: baseFilterOct,
+        min: 0,
+        max: 6,
+        write: (v) => poly.set({ filterEnvelope: { octaves: clamp(v, 0, 6) } }),
       });
     },
     dispose() {

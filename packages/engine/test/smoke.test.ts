@@ -50,6 +50,7 @@ describe('headless smoke — pure-logic boot', () => {
       for (let step = 0; step < 512; step++) {
         const density = macrosAt(patch.dna.arc, step / 512).density;
         const notes = decideStep({ dna: patch.dna, scene: scene.audioParams, density, rng, state });
+        expect(state.activePad.length).toBeLessThanOrEqual(scene.audioParams.voices.maxPolyphony);
         for (const note of notes) {
           produced++;
           expect(isFinite_(note.midi)).toBe(true);

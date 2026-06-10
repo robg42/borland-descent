@@ -9,6 +9,7 @@ import { createSynth, type SynthModule } from './synths';
 import { Analysers } from './analysers';
 import { Composer } from './composer/composer';
 import { TapeWarmth } from './effects/tapeWarmth';
+import { generateHallIR } from './effects/hallIR';
 
 function nodeParams(patch: Patch, id: string): Record<string, Scalar> {
   return patch.audioGraph.nodes.find((n) => n.id === id)?.params ?? {};
@@ -30,7 +31,7 @@ export class AudioEngine {
   private readonly pad: SynthModule;
   private readonly bass: SynthModule;
   private readonly composer: Composer;
-  private reverb: Tone.Reverb | null = null;
+  private reverb: Tone.Convolver | null = null;
   private reverbHP: Tone.Filter | null = null;
   private tape: TapeWarmth | null = null;
   private lfo: Tone.LFO | null = null;
@@ -57,14 +58,21 @@ export class AudioEngine {
   /** Build the graph. Async: the reverb IR and the worklet module load here. */
   async build(): Promise<void> {
     const reverbSize = this.scene.audioParams.reverbSize;
-    // A warmer, more intimate space than a ~9-second cathedral (Boards-of-Canada rooms
-    // breathe, they don't boom); the tape downstream darkens and modulates the tail.
-    this.reverb = new Tone.Reverb({
-      decay: 1.4 + reverbSize * 7,
-      preDelay: 0.012 + reverbSize * 0.03,
-      wet: 1,
-    });
-    await this.reverb.ready;
+    // Convolution reverb — real space. By default a warm generated hall IR (early
+    // reflections + a frequency-damped, stereo-decorrelated tail); a real recorded IR
+    // (e.g. an Open AIR cathedral) drops in via the reverb node's `ir` and replaces it.
+    const reverbNode = this.patch.audioGraph.nodes.find((n) => n.id === 'reverb');
+    this.reverb = new Tone.Convolver();
+    this.reverb.buffer = Tone.ToneAudioBuffer.fromArray(
+      generateHallIR(Tone.getContext().sampleRate, 1.4 + reverbSize * 7, 0.012 + reverbSize * 0.03),
+    );
+    if (typeof reverbNode?.ir === 'string' && reverbNode.ir.length > 0) {
+      try {
+        await this.reverb.load(reverbNode.ir);
+      } catch (err) {
+        console.warn('[borland] reverb IR failed to load; using the generated hall.', err);
+      }
+    }
 
     // Shimmer's own reverb blooms the octave-up signal; built async like the main one.
     const shimmerParams = nodeParams(this.patch, 'shimmer');
@@ -166,6 +174,11 @@ export class AudioEngine {
       max: num(lfoParams.max, 220),
       type: 'sine',
     }).start();
+
+    // If this scene's voice is a sampler, bind its user sample (referenced by id from the
+    // patch; the binary is read from the runtime SampleStore / IndexedDB).
+    const voicesNode = this.patch.audioGraph.nodes.find((n) => n.id === 'voices');
+    if (voicesNode?.sampleId) this.pad.bindSample?.(voicesNode.sampleId);
 
     this.registerPorts();
   }

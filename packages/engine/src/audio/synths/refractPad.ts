@@ -3,7 +3,7 @@ import { clamp } from '../../core/curves';
 import { makePortRef } from '../../core/ports';
 import type { SignalRegistry } from '../../core/registry';
 import type { Scalar } from '../../patch/schema';
-import { numParam, type SynthModule, type SynthOptions } from './types';
+import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from './types';
 
 const CUTOFF_MIN = 150;
 const CUTOFF_MAX = 10000;
@@ -67,6 +67,24 @@ export function createRefractPad(opts?: SynthOptions): SynthModule {
         kind: 'bipolar',
         base: baseDetune,
         write: (v) => poly.set({ detune: clamp(v, -1200, 1200) }),
+      });
+
+      registerAdsrPorts(
+        nodeId,
+        registry,
+        params,
+        { attack: 1.1, decay: 0.7, sustain: 0.7, release: 3.6 },
+        (env) => poly.set({ envelope: env }),
+      );
+
+      const baseHarmonicity = numParam(params, 'harmonicity', 2.51);
+      poly.set({ harmonicity: baseHarmonicity });
+      registry.addInput(makePortRef(nodeId, 'harmonicity'), {
+        kind: 'scalar',
+        base: baseHarmonicity,
+        min: 0.25,
+        max: 8,
+        write: (v) => poly.set({ harmonicity: clamp(v, 0.25, 8) }),
       });
     },
     dispose() {

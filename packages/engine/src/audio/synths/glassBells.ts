@@ -3,7 +3,7 @@ import { clamp } from '../../core/curves';
 import { makePortRef } from '../../core/ports';
 import type { SignalRegistry } from '../../core/registry';
 import type { Scalar } from '../../patch/schema';
-import { numParam, type SynthModule, type SynthOptions } from './types';
+import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from './types';
 
 const CUTOFF_MIN = 300;
 const CUTOFF_MAX = 14000;
@@ -69,6 +69,33 @@ export function createGlassBells(opts?: SynthOptions): SynthModule {
         kind: 'bipolar',
         base: baseDetune,
         write: (v) => poly.set({ detune: clamp(v, -1200, 1200) }),
+      });
+
+      registerAdsrPorts(
+        nodeId,
+        registry,
+        params,
+        { attack: 0.006, decay: 1.4, sustain: 0.18, release: 2.8 },
+        (env) => poly.set({ envelope: env }),
+      );
+
+      const baseHarmonicity = numParam(params, 'harmonicity', 3.01);
+      poly.set({ harmonicity: baseHarmonicity });
+      registry.addInput(makePortRef(nodeId, 'harmonicity'), {
+        kind: 'scalar',
+        base: baseHarmonicity,
+        min: 0.25,
+        max: 12,
+        write: (v) => poly.set({ harmonicity: clamp(v, 0.25, 12) }),
+      });
+      const baseModIndex = numParam(params, 'modIndex', 5);
+      poly.set({ modulationIndex: baseModIndex });
+      registry.addInput(makePortRef(nodeId, 'modIndex'), {
+        kind: 'scalar',
+        base: baseModIndex,
+        min: 0,
+        max: 25,
+        write: (v) => poly.set({ modulationIndex: clamp(v, 0, 25) }),
       });
     },
     dispose() {

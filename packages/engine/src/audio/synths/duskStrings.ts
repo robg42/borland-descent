@@ -3,7 +3,7 @@ import { clamp } from '../../core/curves';
 import { makePortRef } from '../../core/ports';
 import type { SignalRegistry } from '../../core/registry';
 import type { Scalar } from '../../patch/schema';
-import { numParam, type SynthModule, type SynthOptions } from './types';
+import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from './types';
 
 const CUTOFF_MIN = 120;
 const CUTOFF_MAX = 9000;
@@ -67,6 +67,14 @@ export function createDuskStrings(opts?: SynthOptions): SynthModule {
         base: baseDetune,
         write: (v) => poly.set({ detune: clamp(v, -1200, 1200) }),
       });
+
+      registerAdsrPorts(
+        nodeId,
+        registry,
+        params,
+        { attack: 1.8, decay: 1.0, sustain: 0.6, release: 5.0 },
+        (env) => poly.set({ envelope: env }),
+      );
     },
     dispose() {
       poly.dispose();

@@ -3,7 +3,7 @@ import { clamp } from '../../core/curves';
 import { makePortRef } from '../../core/ports';
 import type { SignalRegistry } from '../../core/registry';
 import type { Scalar } from '../../patch/schema';
-import { numParam, type SynthModule, type SynthOptions } from './types';
+import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from './types';
 
 const CUTOFF_MIN = 60;
 const CUTOFF_MAX = 9000;
@@ -60,6 +60,33 @@ export function createVoidChoir(opts?: SynthOptions): SynthModule {
           out.gain.value = clamp(v, 0, 1.5);
         },
         audioTarget: out.gain,
+      });
+
+      registerAdsrPorts(
+        nodeId,
+        registry,
+        params,
+        { attack: 2.2, decay: 1.2, sustain: 0.75, release: 4.5 },
+        (env) => poly.set({ envelope: env }),
+      );
+
+      const baseHarmonicity = numParam(params, 'harmonicity', 1.41);
+      poly.set({ harmonicity: baseHarmonicity });
+      registry.addInput(makePortRef(nodeId, 'harmonicity'), {
+        kind: 'scalar',
+        base: baseHarmonicity,
+        min: 0.25,
+        max: 8,
+        write: (v) => poly.set({ harmonicity: clamp(v, 0.25, 8) }),
+      });
+      const baseModIndex = numParam(params, 'modIndex', 7);
+      poly.set({ modulationIndex: baseModIndex });
+      registry.addInput(makePortRef(nodeId, 'modIndex'), {
+        kind: 'scalar',
+        base: baseModIndex,
+        min: 0,
+        max: 25,
+        write: (v) => poly.set({ modulationIndex: clamp(v, 0, 25) }),
       });
     },
     dispose() {

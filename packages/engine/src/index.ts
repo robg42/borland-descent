@@ -27,3 +27,15 @@ export * from './patch/types';
 export { defaultPatch } from './patch/default';
 export { JsonPatchStore, parsePatchOrDefault } from './patch/store';
 export type { PatchStore, JsonPatchStoreOptions } from './patch/store';
+
+// User samples (runtime store, persisted to IndexedDB; referenced from the Patch by id)
+export { sampleStore, previewSample } from './audio/sampleStore';
+export type { SampleMeta, SampleEntry } from './audio/sampleStore';
+
+// Resynthesis — offline transforms (PaulStretch, granular) that turn a sample into a
+// new derived sample (time-stretch / granulise / extreme smear). Dependency-free DSP.
+export { resynthesizeSample } from './audio/resynthesis';
+export type { ResynthSpec } from './audio/resynthesis';
+
+// Synth-module ids (for the studio's per-scene voice picker)
+export { SYNTH_MODULE_IDS } from './audio/synths';

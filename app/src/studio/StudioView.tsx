@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { JsonPatchStore, type ModulationRoute, type Patch } from '@borland/engine';
+import { JsonPatchStore, SYNTH_MODULE_IDS, type ModulationRoute, type Patch } from '@borland/engine';
 import { useEngine } from '../engineReact/useEngine';
 import { TransportBar } from './TransportBar';
 import { SceneParams } from './SceneParams';
 import { MatrixTable } from './MatrixTable';
 import { PatchIO } from './PatchIO';
+import { SamplesPanel } from './SamplesPanel';
 
 /**
  * The studio: a live engine instance against the working Patch. The live preview +
@@ -135,6 +136,69 @@ export function StudioView() {
     setReload((r) => r + 1);
   }, []);
 
+  // Assign a loaded sample as the current scene's voice: point the scene + its 'voices'
+  // node at the sampler module and reference the sample by id, then rebuild the engine.
+  const assignSample = useCallback(
+    (sampleId: string) => {
+      setPatch((prev) => {
+        if (!prev) return prev;
+        const next = structuredClone(prev);
+        const sc = next.scenes[sceneIndex];
+        if (sc) sc.synthModuleId = 'sampler';
+        const voices = next.audioGraph.nodes.find((n) => n.id === 'voices');
+        if (voices) {
+          voices.moduleId = 'sampler';
+          voices.sampleId = sampleId;
+        }
+        return next;
+      });
+      setReload((r) => r + 1);
+    },
+    [sceneIndex],
+  );
+
+  // One-click automate: drop a control route targeting a parameter into the matrix,
+  // defaulting its source to the arc (so it moves with the descent) — tune it from there.
+  const onAutomate = useCallback(
+    (target: string) => {
+      const source = outputs.find((o) => o.ref === 'arc.darkness')?.ref ?? outputs[0]?.ref;
+      if (!source) return;
+      const id = `auto_${target.replace(/\W/g, '_')}_${Math.random().toString(36).slice(2, 7)}`;
+      const route: ModulationRoute = {
+        id,
+        source,
+        target,
+        amount: 0.4,
+        curve: 'linear',
+        smoothing: 80,
+        rate: 'control',
+        enabled: true,
+      };
+      applyRoutes([...routes, route]);
+    },
+    [outputs, routes, applyRoutes],
+  );
+
+  // Set the active scene's voice to any registered synth module, then rebuild the engine.
+  const setVoice = useCallback(
+    (moduleId: string) => {
+      setPatch((prev) => {
+        if (!prev) return prev;
+        const next = structuredClone(prev);
+        const sc = next.scenes[sceneIndex];
+        if (sc) sc.synthModuleId = moduleId;
+        const voices = next.audioGraph.nodes.find((n) => n.id === 'voices');
+        if (voices) {
+          voices.moduleId = moduleId;
+          if (moduleId !== 'sampler') delete voices.sampleId;
+        }
+        return next;
+      });
+      setReload((r) => r + 1);
+    },
+    [sceneIndex],
+  );
+
   const scenes = patch?.scenes ?? [];
 
   return (
@@ -179,9 +243,26 @@ export function StudioView() {
               </select>
             </div>
           )}
+          <div className="row">
+            <span className="ctl__name">
+              <b>voice</b>
+            </span>
+            <select
+              className="field"
+              style={{ maxWidth: '14rem' }}
+              value={scenes[sceneIndex]?.synthModuleId ?? ''}
+              onChange={(e) => setVoice(e.target.value)}
+            >
+              {SYNTH_MODULE_IDS.filter((id) => id !== 'subBass').map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
+          </div>
           <p className="hint">
             Drag, scroll or pinch the preview to move through the arc. Edits apply live;
-            switching scene rebuilds the engine.
+            switching scene or voice rebuilds the engine.
           </p>
         </div>
       </div>
@@ -191,7 +272,12 @@ export function StudioView() {
           <div className="panel__head">
             <p className="panel__label">scene parameters</p>
           </div>
-          <SceneParams engine={engine} inputs={inputs} />
+          <SceneParams
+            engine={engine}
+            inputs={inputs}
+            patch={engine?.patch ?? patch}
+            onAutomate={onAutomate}
+          />
         </section>
 
         <section className="panel">
@@ -199,6 +285,13 @@ export function StudioView() {
             <p className="panel__label">modulation matrix</p>
           </div>
           <MatrixTable routes={routes} inputs={inputs} outputs={outputs} onChange={applyRoutes} />
+        </section>
+
+        <section className="panel">
+          <div className="panel__head">
+            <p className="panel__label">samples</p>
+          </div>
+          <SamplesPanel onAssign={assignSample} activeSceneName={scenes[sceneIndex]?.name} />
         </section>
 
         <section className="panel">
