@@ -23,8 +23,15 @@ export class Matrix {
   private readonly controlRoutes: ModulationRoute[] = [];
   /** Last smoothed value written per control target. */
   private readonly smoothed = new Map<string, number>();
-  /** Effective smoothing (ms) per control target — the max across its routes. */
+  /** Effective smoothing (ms) per control target — the max across its NUMERIC routes. */
   private readonly smoothingByTarget = new Map<string, number>();
+  /** Every input ref driven by at least one control route (numeric or trigger). */
+  private readonly controlTargetRefs = new Set<string>();
+  /** Routes whose SOURCE is a trigger: pulses become decaying envelopes here.
+   *  The route's `smoothing` field is the envelope RELEASE (ms); these routes
+   *  are excluded from per-target smoothing so the attack stays instant. */
+  private readonly triggerRouteIds = new Set<string>();
+  private readonly triggerEnv = new Map<string, number>();
 
   constructor(
     private readonly routes: ModulationRoute[],
@@ -55,7 +62,12 @@ export class Matrix {
       }
       // control-rate: accumulate per-target, smoothing = slowest route to that target
       this.controlRoutes.push(r);
-      this.smoothingByTarget.set(r.target, Math.max(this.smoothingByTarget.get(r.target) ?? 0, r.smoothing));
+      this.controlTargetRefs.add(r.target);
+      if (out.kind === 'trigger') {
+        this.triggerRouteIds.add(r.id); // envelope semantics — no target smoothing
+      } else {
+        this.smoothingByTarget.set(r.target, Math.max(this.smoothingByTarget.get(r.target) ?? 0, r.smoothing));
+      }
       if (!this.smoothed.has(r.target)) this.smoothed.set(r.target, inp.base);
     }
   }
@@ -73,9 +85,22 @@ export class Matrix {
 
   /** Evaluate control-rate routes for this frame and write smoothed values. */
   evaluateControl(dt: number): void {
+    // Trigger routes first: a pulse (read 1) snaps the envelope to full, which
+    // then decays exponentially over the route's release — sharp attack, long
+    // tail, exactly the onset-gates-a-parameter shape (V2).
+    for (const r of this.controlRoutes) {
+      if (!this.triggerRouteIds.has(r.id)) continue;
+      const fired = (this.registry.getOutput(r.source)?.read() ?? 0) > 0;
+      const releaseSec = Math.max(0.001, r.smoothing / 1000);
+      const prev = this.triggerEnv.get(r.id) ?? 0;
+      this.triggerEnv.set(r.id, Math.max(prev * Math.exp(-dt / releaseSec), fired ? 1 : 0));
+    }
     const targets = evaluateControlTargets(
       this.controlRoutes,
-      (ref) => this.registry.getOutput(ref)?.read(),
+      (route) =>
+        this.triggerRouteIds.has(route.id)
+          ? this.triggerEnv.get(route.id)
+          : this.registry.getOutput(route.source)?.read(),
       (ref) => this.registry.getInput(ref)?.base,
     );
     for (const [ref, raw] of targets) {
@@ -91,7 +116,7 @@ export class Matrix {
 
   /** The set of inputs currently driven by at least one enabled control route. */
   controlTargets(): Set<string> {
-    return new Set(this.smoothingByTarget.keys());
+    return new Set(this.controlTargetRefs);
   }
 
   dispose(): void {
@@ -100,6 +125,9 @@ export class Matrix {
     this.controlRoutes.length = 0;
     this.smoothed.clear();
     this.smoothingByTarget.clear();
+    this.controlTargetRefs.clear();
+    this.triggerRouteIds.clear();
+    this.triggerEnv.clear();
   }
 }
 

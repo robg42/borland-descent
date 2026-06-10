@@ -274,6 +274,23 @@ export class AudioEngine {
       read: () => this.analysers.readBand(0.5, 1),
     });
 
+    // V2 feature layer — eight log-spaced envelope-followed bands, spectral
+    // flux, and the onset TRIGGER (fires decaying envelopes via the matrix).
+    for (let b = 0; b < 8; b++) {
+      this.registry.addOutput(makePortRef('audio', `band${b + 1}`), {
+        kind: 'unipolar',
+        read: () => this.analysers.readFeatureBand(b),
+      });
+    }
+    this.registry.addOutput(makePortRef('audio', 'flux'), {
+      kind: 'unipolar',
+      read: () => this.analysers.readFlux(),
+    });
+    this.registry.addOutput(makePortRef('audio', 'onset'), {
+      kind: 'trigger',
+      read: () => this.analysers.readOnset(),
+    });
+
     if (this.drift) {
       const drift = this.drift;
       this.registry.addInput(makePortRef('drift', 'depth'), {
@@ -299,6 +316,11 @@ export class AudioEngine {
 
   startComposer(): void {
     this.composer.start();
+  }
+
+  /** Refresh the audio features for this frame (engine loop, before the matrix). */
+  tickFeatures(dt: number): void {
+    this.analysers.update(dt);
   }
 
   /** Apply arc macros to the global audio feel each frame (cheap params only). */

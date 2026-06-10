@@ -145,6 +145,13 @@ preset-capable. Glitch/feedback as an 11th when the RT pool lands.
 
 ## 5 · Phased plan (each phase gated, `npm run check` + on-device verify)
 
+> **Progress:** V1 ✅ (commits `8a30da4`, `fb5a98a`, `3873578` — contract,
+> single-renderer host with crossfade-as-blend verified in-browser, all seven
+> modules migrated, studio module picker). V2 ✅ (feature layer: 8 log bands /
+> flux / onset trigger ports; trigger→numeric envelope routing in the Matrix;
+> 8 new headless tests; sources appear in the routing UI automatically).
+> Next: V3 modules (signal / swarm / beams), then V4 presets.
+
 - **V1 — Host + contract (the structural phase).** Single shared renderer +
   composer + RT pool; crossfade as blend pass (closes REVIEW H3);
   `VisualModuleDescriptor` + generic binder; migrate all 7 modules onto it

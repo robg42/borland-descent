@@ -42,8 +42,8 @@ function harness(outKind: PortKind, inKind: PortKind, base = 0): {
 describe('matrix — type compatibility (golden rule §4)', () => {
   it('drops an incompatible control route and never writes its target', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    // trigger → unipolar is incompatible (trigger only pairs with trigger).
-    const { registry, writes, source, target } = harness('trigger', 'unipolar');
+    // numeric → trigger is incompatible (only a trigger may drive a trigger).
+    const { registry, writes, source, target } = harness('unipolar', 'trigger');
     const m = new Matrix([route({ source, target })], registry);
     m.setup();
     expect(m.controlTargets().has(target)).toBe(false);
@@ -60,6 +60,33 @@ describe('matrix — type compatibility (golden rule §4)', () => {
     expect(m.controlTargets().has(target)).toBe(true);
     m.evaluateControl(0.016); // smoothing 0 → instant
     expect(writes.at(-1)).toBeCloseTo(1); // base 0 + source 1 * amount 1
+  });
+});
+
+describe('matrix — trigger routes fire decaying envelopes (V2)', () => {
+  it('a trigger pulse snaps the target to full and decays over the release', () => {
+    const registry = new SignalRegistry();
+    const writes: number[] = [];
+    let fire = 1;
+    registry.addOutput('audio.onset' as PortRef, { kind: 'trigger', read: () => fire });
+    registry.addInput('field.flicker' as PortRef, { kind: 'unipolar', base: 0, write: (v) => writes.push(v) });
+    // smoothing on a trigger route = the envelope RELEASE in ms.
+    const m = new Matrix(
+      [route({ source: 'audio.onset' as PortRef, target: 'field.flicker' as PortRef, smoothing: 200 })],
+      registry,
+    );
+    m.setup();
+    expect(m.controlTargets().has('field.flicker')).toBe(true);
+
+    m.evaluateControl(0.016); // the pulse frame: attack is instant (no target smoothing)
+    expect(writes.at(-1)).toBeCloseTo(1, 5);
+
+    fire = 0;
+    m.evaluateControl(0.2); // one release-constant later: e^-1 of the peak remains
+    expect(writes.at(-1)).toBeCloseTo(Math.exp(-1), 2);
+
+    m.evaluateControl(0.2);
+    expect(writes.at(-1)).toBeCloseTo(Math.exp(-2), 2);
   });
 });
 

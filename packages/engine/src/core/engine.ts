@@ -392,6 +392,8 @@ export class Engine {
       this.advanceCrossfade(dt);
       this.active?.applyArc(pos);
       this.incoming?.applyArc(pos);
+      this.active?.tick(dt); // refresh audio features before the matrix reads them
+      this.incoming?.tick(dt);
       this.host?.setArc(this.darkness(pos));
       this.matrix?.evaluateControl(dt);
       const time = this.reducedMotion ? 0 : this.transport.seconds;

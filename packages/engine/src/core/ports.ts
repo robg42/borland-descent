@@ -31,9 +31,13 @@ export function parsePortRef(ref: PortRef): { nodeId: string; portName: string }
   return { nodeId: ref.slice(0, dot), portName: ref.slice(dot + 1) };
 }
 
-/** Whether an OUTPUT port of kind `from` may drive an INPUT port of kind `to`. */
+/** Whether an OUTPUT port of kind `from` may drive an INPUT port of kind `to`.
+ *  V2: a trigger SOURCE may drive numeric targets — the matrix converts the
+ *  pulse into a decaying envelope (the route's smoothing is its release), so
+ *  onsets can gate any parameter. Nothing numeric may drive a trigger input. */
 export function isCompatible(from: PortKind, to: PortKind): boolean {
-  if (from === 'trigger' || to === 'trigger') return from === to;
+  if (to === 'trigger') return from === 'trigger';
+  if (from === 'trigger') return to === 'scalar' || to === 'unipolar' || to === 'bipolar';
   if (from === 'vector' || to === 'vector') return from === to;
   // scalar / unipolar / bipolar are all numeric — the matrix scales & curves them.
   return true;

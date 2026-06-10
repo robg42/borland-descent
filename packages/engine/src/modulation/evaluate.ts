@@ -5,17 +5,19 @@ import { applyCurve } from '../core/curves';
  * Pure control-rate evaluation: for each enabled control route, shape the source by
  * its curve, scale by amount, and accumulate onto the target's base value. Returns
  * the raw (un-smoothed, un-clamped) target values. Smoothing + clamping + writing
- * happen in the Matrix (stateful). Kept pure so it is unit-testable headlessly.
+ * happen in the Matrix (stateful), as do trigger envelopes — which is why the
+ * source reader receives the whole ROUTE: trigger routes read their envelope,
+ * numeric routes read their registry port. Kept pure so it is unit-testable.
  */
 export function evaluateControlTargets(
   routes: ModulationRoute[],
-  readSource: (ref: string) => number | undefined,
+  readSource: (route: ModulationRoute) => number | undefined,
   baseOf: (ref: string) => number | undefined,
 ): Map<string, number> {
   const targets = new Map<string, number>();
   for (const r of routes) {
     if (r.enabled === false || r.rate !== 'control') continue;
-    const src = readSource(r.source);
+    const src = readSource(r);
     if (src === undefined) continue;
     const base = baseOf(r.target);
     if (base === undefined) continue;

@@ -64,6 +64,11 @@ export class SceneInstance {
     this.audio?.applyArc(position);
   }
 
+  /** Per-frame feature refresh (bands/flux/onset) — before the matrix reads. */
+  tick(dt: number): void {
+    this.audio?.tickFeatures(dt);
+  }
+
   /** Set this scene's audio level instantly (0..1). The host ramps it per frame to
    *  cross-fade against another scene (§18.2). No-op before build(). */
   setLevel(v: number): void {

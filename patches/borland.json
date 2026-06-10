@@ -327,7 +327,9 @@
     { "id": "r15", "source": "masterMeter.level", "target": "field.sonar", "amount": 0.4, "curve": "linear", "smoothing": 300, "rate": "control", "enabled": true },
     { "id": "r16", "source": "bassMeter.level", "target": "field.maw", "amount": 0.12, "curve": "linear", "smoothing": 250, "rate": "control", "enabled": true },
     { "id": "r17", "source": "masterMeter.level", "target": "field.glow", "amount": 0.5, "curve": "linear", "smoothing": 200, "rate": "control", "enabled": true },
-    { "id": "r18", "source": "bassMeter.level", "target": "field.shafts", "amount": 0.35, "curve": "linear", "smoothing": 400, "rate": "control", "enabled": true }
+    { "id": "r18", "source": "bassMeter.level", "target": "field.shafts", "amount": 0.35, "curve": "linear", "smoothing": 400, "rate": "control", "enabled": true },
+    { "id": "r19", "source": "audio.onset", "target": "field.flicker", "amount": 0.8, "curve": "linear", "smoothing": 140, "rate": "control", "enabled": true },
+    { "id": "r20", "source": "audio.flux", "target": "field.glint", "amount": 0.35, "curve": "linear", "smoothing": 90, "rate": "control", "enabled": true }
   ],
   "sequences": [],
   "presets": []
