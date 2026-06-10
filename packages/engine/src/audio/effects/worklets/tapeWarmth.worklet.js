@@ -34,6 +34,11 @@ class TapeWarmthProcessor extends AudioWorkletProcessor {
     this.chOffset = [0, 0.37];
     // previous input per channel — for 2× oversampling the saturation (anti-aliasing)
     this.satPrev = [0, 0];
+    // Per-block one-pole smoothing: each param target is ramped over ~50 ms of blocks
+    // (blockSize/sr ≈ 2.9 ms per block at 128 samples / 44100 Hz, so tc ≈ 17 blocks).
+    // This eliminates the audible step artefact when the matrix or studio sliders write
+    // a new value between blocks.
+    this.sm = { drive: 1.4, fDepth: 0.15, fRate: 4, hf: 7000, hiss: 0.0015, crush: 12 };
   }
 
   process(inputs, outputs, params) {
@@ -43,12 +48,23 @@ class TapeWarmthProcessor extends AudioWorkletProcessor {
     const nCh = output.length;
     const n = output[0].length;
 
-    const drive = params.drive[0] ?? 1.4;
-    const fDepth = params.flutterDepth[0] ?? 0.15;
-    const fRate = params.flutterRate[0] ?? 4;
-    const hf = params.hfCutoff[0] ?? 7000;
-    const hiss = params.hiss[0] ?? 0.0015;
-    const crush = params.crush[0] ?? 12;
+    // Per-block smoothing coefficient: 1 − exp(−blockDuration / tc), tc = 0.05 s.
+    const blockDur = n / this.sr;
+    const smCoeff = 1 - Math.exp(-blockDur / 0.05);
+    const sm = this.sm;
+    sm.drive  += smCoeff * ((params.drive[0]        ?? 1.4)    - sm.drive);
+    sm.fDepth += smCoeff * ((params.flutterDepth[0] ?? 0.15)   - sm.fDepth);
+    sm.fRate  += smCoeff * ((params.flutterRate[0]  ?? 4)      - sm.fRate);
+    sm.hf     += smCoeff * ((params.hfCutoff[0]     ?? 7000)   - sm.hf);
+    sm.hiss   += smCoeff * ((params.hiss[0]          ?? 0.0015) - sm.hiss);
+    sm.crush  += smCoeff * ((params.crush[0]         ?? 12)     - sm.crush);
+
+    const drive = sm.drive;
+    const fDepth = sm.fDepth;
+    const fRate = sm.fRate;
+    const hf = sm.hf;
+    const hiss = sm.hiss;
+    const crush = sm.crush;
 
     const lpCoeff = Math.min(1, (2 * Math.PI * hf) / this.sr);
     const wowInc = 0.6 / this.sr; // ~0.6 Hz wow

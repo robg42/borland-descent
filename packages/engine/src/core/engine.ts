@@ -63,10 +63,23 @@ export class Engine {
   private crossfadeElapsed = 0;
   private crossfadeDur = 0;
 
+  // ---- background tick (B P1) ----
+  // When the tab is hidden rAF stops, but audio, matrix evaluation, and crossfade
+  // advance must keep running. A ~4 Hz setInterval fallback covers these while the
+  // tab is hidden; visuals stay paused (no rAF draw). The interval is started/stopped
+  // alongside the visibility change so it only runs while the tab is hidden.
+  private bgIntervalId: ReturnType<typeof setInterval> | null = null;
+  private lastBgTs = 0;
+
   private readonly onVisibilityChange = (): void => {
     if (typeof document === 'undefined') return;
-    if (document.hidden) this.stopLoop();
-    else if (this.running) this.startLoop();
+    if (document.hidden) {
+      this.stopLoop();
+      this.startBgTick();
+    } else {
+      this.stopBgTick();
+      if (this.running) this.startLoop();
+    }
   };
 
   constructor(opts: EngineOptions) {
@@ -448,6 +461,27 @@ export class Engine {
     }
   }
 
+  private startBgTick(): void {
+    if (this.bgIntervalId !== null || !this.running) return;
+    this.lastBgTs = Date.now();
+    this.bgIntervalId = setInterval(() => {
+      const now = Date.now();
+      const dt = Math.min((now - this.lastBgTs) / 1000, 0.5);
+      this.lastBgTs = now;
+      this.advanceCrossfade(dt);
+      this.active?.applyArc(this.arcPosition);
+      this.incoming?.applyArc(this.arcPosition);
+      this.matrix?.evaluateControl(dt);
+    }, 250); // ~4 Hz
+  }
+
+  private stopBgTick(): void {
+    if (this.bgIntervalId !== null) {
+      clearInterval(this.bgIntervalId);
+      this.bgIntervalId = null;
+    }
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -456,6 +490,7 @@ export class Engine {
       document.removeEventListener('visibilitychange', this.onVisibilityChange);
     }
     this.stopLoop();
+    this.stopBgTick();
     this.transport.stop();
     this.matrix?.dispose();
     this.active?.dispose();
