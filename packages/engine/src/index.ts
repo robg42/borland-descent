@@ -12,6 +12,11 @@ export { smoothWrite } from './core/params';
 export type { SmoothableParam } from './core/params';
 export { VisualEngine } from './visual/visualEngine';
 
+// Visual module contract (VISUAL-REBUILD V1): descriptors drive the generated
+// registry bindings, studio panels and routing targets.
+export { descriptorUniforms, bindDescriptorPorts } from './visual/moduleDescriptor';
+export type { VisualModuleDescriptor, ModuleParamSpec, VisualModule } from './visual/moduleDescriptor';
+
 // Sequencer contract (Workstream A implements core/scheduler against these)
 export type {
   SequencerEvent,

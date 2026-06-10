@@ -45,9 +45,14 @@ describe('patch migration (v1 → v2)', () => {
     const v1 = structuredClone(borland) as Record<string, unknown>;
     (v1.meta as Record<string, unknown>).version = 1;
     delete v1.sequences;
-    const migrated = migratePatch(v1) as { meta: { version: number }; sequences: unknown[] };
+    const migrated = migratePatch(v1) as {
+      meta: { version: number };
+      sequences: unknown[];
+      presets: unknown[];
+    };
     expect(migrated.meta.version).toBe(CURRENT_PATCH_VERSION);
     expect(migrated.sequences).toEqual([]);
+    expect(migrated.presets).toEqual([]);
     expect(safeValidatePatch(migrated).success).toBe(true);
   });
 

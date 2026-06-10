@@ -18,6 +18,7 @@ export type {
   Sequence,
   SequenceStep,
   SequenceTarget,
+  Preset,
   GestureBinding,
   SceneAudioParams,
   SceneTransition,

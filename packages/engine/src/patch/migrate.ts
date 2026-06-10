@@ -5,7 +5,7 @@
  * loading forever, and re-running a migration is harmless.
  */
 
-export const CURRENT_PATCH_VERSION = 2;
+export const CURRENT_PATCH_VERSION = 3;
 
 type Step = (doc: Record<string, unknown>) => void;
 
@@ -14,6 +14,10 @@ const STEPS: Record<number, Step> = {
   // v1 -> v2: sequences enter the Patch (Workstream A).
   1: (doc) => {
     doc.sequences ??= [];
+  },
+  // v2 -> v3: presets enter the Patch (VISUAL-REBUILD V1 reserves the seat).
+  2: (doc) => {
+    doc.presets ??= [];
   },
 };
 

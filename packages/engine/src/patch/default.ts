@@ -9,7 +9,7 @@ export const defaultPatch: Patch = {
   meta: {
     id: 'default',
     name: 'Borland — bundled default',
-    version: 2,
+    version: 3,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     seed: 1,
@@ -69,4 +69,5 @@ export const defaultPatch: Patch = {
   visualGraph: { layers: [], postChain: [] },
   modulationMatrix: [],
   sequences: [],
+  presets: [],
 };

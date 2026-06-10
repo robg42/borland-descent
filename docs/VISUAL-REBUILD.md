@@ -1,8 +1,10 @@
 # Visual Engine Rebuild — Analysis & Proposal
 
-**Date:** 2026-06-10 · **Status: PROPOSAL — awaiting sign-off; no rebuild code
-written.** · Companions: [REVIEW.md](./REVIEW.md) §4,
-[ART-DIRECTION.md](./ART-DIRECTION.md), [PLAN.md](./PLAN.md) Workstream C.
+**Date:** 2026-06-10 · **Status: APPROVED 2026-06-10** — decisions: approach +
+V1–V4 plan approved; **N = 10**; feedback/glitch in V3 *if budget holds* (RT
+pool still built in V1); presets **both** per-scene and global. ·
+Companions: [REVIEW.md](./REVIEW.md) §4, [ART-DIRECTION.md](./ART-DIRECTION.md),
+[PLAN.md](./PLAN.md) Workstream C.
 
 ## 1 · How the visual engine works today
 

@@ -160,6 +160,20 @@ export const SequenceSchema = z.object({
   steps: z.array(SequenceStepSchema).default([]),
 });
 
+// ---- presets (schema v3) ---------------------------------------------------------
+// A named capture of visual state: module choice + parameter values + the routes
+// scoped to it. sceneId set = a scene's preset; absent = global (whole visual
+// state). Recall/morph is implemented in the studio + engine (VISUAL-REBUILD V4);
+// the document seat is reserved from v3 so later phases need no new migration.
+export const PresetSchema = z.object({
+  id: idSchema,
+  name: z.string(),
+  sceneId: idSchema.optional(),
+  moduleId: z.string().optional(),
+  params: z.record(z.string(), scalar).default({}),
+  routes: z.array(ModulationRouteSchema).default([]),
+});
+
 // ---- gesture -------------------------------------------------------------------
 export const GestureBindingSchema = z.object({
   gesture: z.enum(['zoomDepth', 'touchX', 'touchY', 'dragVelocity', 'pressure', 'multiTouch']),
@@ -215,6 +229,7 @@ export const PatchSchema = z.looseObject({
   visualGraph: VisualGraphSchema,
   modulationMatrix: z.array(ModulationRouteSchema).default([]),
   sequences: z.array(SequenceSchema).default([]),
+  presets: z.array(PresetSchema).default([]),
 });
 
 // ---- inferred types (canonical) ------------------------------------------------
@@ -233,6 +248,7 @@ export type ModulationRoute = z.infer<typeof ModulationRouteSchema>;
 export type Sequence = z.infer<typeof SequenceSchema>;
 export type SequenceStep = z.infer<typeof SequenceStepSchema>;
 export type SequenceTarget = z.infer<typeof SequenceTargetSchema>;
+export type Preset = z.infer<typeof PresetSchema>;
 export type GestureBinding = z.infer<typeof GestureBindingSchema>;
 export type SceneAudioParams = z.infer<typeof SceneAudioParamsSchema>;
 export type SceneTransition = z.infer<typeof SceneTransitionSchema>;
