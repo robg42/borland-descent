@@ -19,6 +19,9 @@ export const descriptor: VisualModuleDescriptor = {
     { key: 'depth', kind: 'unipolar', min: 0, max: 1, default: 0.5, group: 'field' },
     { key: 'lume', kind: 'unipolar', min: 0, max: 1, default: 0.55, group: 'scene' },
     { key: 'presence', kind: 'unipolar', min: 0, max: 1, default: 0.35, group: 'scene' },
+    // 0 = everything sinks together (the canonical fall); 1 = each snow plane
+    // drifts on its own heading — the shoal of dust pulled apart by currents
+    { key: 'scatter', kind: 'unipolar', min: 0, max: 1, default: 0, group: 'scene' },
   ],
 };
 
@@ -43,7 +46,7 @@ const fragmentShader = /* glsl */ `
   uniform float uTime;
   uniform vec2 uResolution;
   uniform float uFog, uFlow, uDepth, uDark;
-  uniform float uLume, uPresence;
+  uniform float uLume, uPresence, uScatter;
   varying vec2 vUv;
 
   float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
@@ -72,10 +75,11 @@ const fragmentShader = /* glsl */ `
   }
 
   // one depth-of-field snow plane: cell scale = density, blur = disc softness,
-  // spd = fall rate. The early return is coherent per grid cell, so it is cheap.
-  float snow(vec2 p, float t, float scale, float blur, float spd, float seed){
+  // spd = drift rate along dir (sample-space; (0,1) reads as sinking on screen).
+  // The early return is coherent per grid cell, so it is cheap.
+  float snow(vec2 p, float t, float scale, float blur, float spd, float seed, vec2 dir){
     vec2 g = p * scale;
-    g.y += t * spd;                               // motes sink
+    g += t * spd * dir;                           // the plane's own heading
     g.x += sin(t * 0.22 + seed) * 0.35;           // slow lateral drift
     vec2 id = floor(g);
     vec2 f = fract(g);
@@ -130,10 +134,16 @@ const fragmentShader = /* glsl */ `
     col += cn * vec3(0.55, 0.49, 0.78) * 0.55;    // heliotrope scatter (#8C7DC7)
 
     // three snow planes; far dust thins behind the beast (it reads as an absence);
-    // every mote flares inside the cone — the beam is rendered by what it catches
-    float farD  = snow(p, t, 60.0, 0.010, 0.55, 27.0) * 0.35 * (1.0 - occl);
-    float midD  = snow(p, t, 26.0, 0.015, 0.95, 13.0) * 0.85;  // the in-focus plane
-    float nearD = snow(p, t,  9.0, 0.120, 1.60,  1.0) * 0.45;  // soft bokeh discs
+    // every mote flares inside the cone — the beam is rendered by what it catches.
+    // Scatter blends each plane from the shared fall onto its own heading, so at
+    // 1 the layers visibly cross one another — dust pulled apart by currents.
+    vec2 FALL = vec2(0.0, 1.0);
+    vec2 dirFar  = normalize(mix(FALL, vec2(-0.90, -0.45), uScatter)); // away up-left
+    vec2 dirMid  = normalize(mix(FALL, vec2( 0.80,  0.60), uScatter)); // down-right
+    vec2 dirNear = normalize(mix(FALL, vec2(-0.85,  0.55), uScatter)); // down-left
+    float farD  = snow(p, t, 60.0, 0.010, 0.55, 27.0, dirFar) * 0.35 * (1.0 - occl);
+    float midD  = snow(p, t, 26.0, 0.015, 0.95, 13.0, dirMid) * 0.85;  // in focus
+    float nearD = snow(p, t,  9.0, 0.120, 1.60,  1.0, dirNear) * 0.45; // bokeh discs
     col += (farD + midD + nearD) * (1.0 + cn * 3.0) * vec3(0.79, 0.74, 0.93);
 
     // the scene's own grade: arc floor, then a vignette anchored just above
