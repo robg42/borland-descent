@@ -110,9 +110,9 @@ const fragmentShader = /* glsl */ `
     }
     v = min(v, 1.1);
 
-    vec3 cold = vec3(0.55, 0.66, 0.85);              // cold white-blue light (linear)
+    vec3 cold = vec3(0.55, 0.62, 0.72);              // moonlight — cool but natural (linear)
     vec3 col = cold * (v + g);
-    col += uFog * 0.04 * vec3(0.25, 0.32, 0.45);
+    col += uFog * 0.04 * vec3(0.26, 0.30, 0.38);
     col *= 1.0 - 0.5 * uDark;
 
     gl_FragColor = vec4(col, 1.0);

@@ -35,8 +35,8 @@ const vertexShader = /* glsl */ `
 // Neural Zoo — the imagined organism (Sofia Crespo lineage): one specimen that
 // has never existed, grown bilaterally symmetric from a ribbed bell and a noisy
 // genome the network never quite resolved. The machine insists on hyper-detail:
-// filigree and veining live only where there is flesh; the membrane carries a
-// thin-film iridescence read straight out of the latent space. It breathes,
+// filigree and veining live only where there is flesh; the membrane carries an
+// abalone shimmer read straight out of the latent space. It breathes,
 // drifts, and answers transients with bioluminescent light at the rim. The arc
 // dissolves the flesh and leaves the outline — a creature reduced to its own
 // drawing in the dark, motes sinking past it.
@@ -83,8 +83,13 @@ const fragmentShader = /* glsl */ `
     float fil = fbm(Q * mix(7.0, 15.0, uDepth) + vec2(0.0, -t * 0.18));
     float veins = pow(0.5 + 0.5 * sin(an * segs * 2.0 + rr * 24.0 - t * 0.7 + fil * 5.0), 6.0);
 
-    // thin-film iridescence read out of the latent space
-    vec3 irid = 0.5 + 0.5 * cos(6.2831 * (fil * 0.7 + rr * 1.6 - an * 0.16 + vec3(0.00, 0.33, 0.67)));
+    // abalone shimmer read out of the latent space: one animated scalar sweeps
+    // the membrane between kelp green and dusty rose over the pearl base —
+    // mother-of-pearl, not petrol slick
+    float shimmer = 0.5 + 0.5 * cos(6.2831 * (fil * 0.7 + rr * 1.6 - an * 0.16));
+    vec3 kelp = vec3(0.28, 0.40, 0.34);
+    vec3 rose = vec3(0.46, 0.34, 0.38);
+    vec3 irid = mix(kelp, rose, shimmer);
     vec3 pearl = vec3(0.36, 0.46, 0.52);
     vec3 flesh = mix(pearl, irid, clamp(uSheen, 0.0, 1.0));
 
@@ -99,8 +104,8 @@ const fragmentShader = /* glsl */ `
     vec3 water = vec3(0.008, 0.014, 0.020);
     vec3 col = water
              + flesh * interior
-             + vec3(0.35, 0.75, 0.80) * edge * 0.9      // bioluminescent rim
-             + vec3(0.45, 0.55, 0.60) * motes * 0.5;
+             + vec3(0.22, 0.46, 0.42) * edge * 0.9      // bioluminescent rim, deep-sea moss-teal
+             + vec3(0.46, 0.55, 0.59) * motes * 0.5;
     col += uFog * 0.05 * vec3(0.10, 0.16, 0.20) * (1.0 - rr); // murk pools at the centre
     col *= 1.0 - 0.45 * uDark;
 

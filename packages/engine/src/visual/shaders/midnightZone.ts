@@ -76,7 +76,7 @@ const fragmentShader = /* glsl */ `
     // entry from twilight, 1 at the hand-off into abyssal. All structural arc
     // response (population, stillness, temperature) is driven from this.
     float res = clamp((uDark - 0.64) / 0.12, 0.0, 1.0);
-    // Mid-residency bell: tint runs desaturated bio-green -> electric -> cold teal.
+    // Mid-residency bell: tint runs desaturated bio-green -> plankton peak -> cold kelp teal.
     float mid = 1.0 - abs(2.0 * res - 1.0);
 
     float flare = 0.55 + 1.45 * uPulse;   // the shoal inhales light on the bass breath
@@ -123,20 +123,20 @@ const fragmentShader = /* glsl */ `
       br *= 1.0 + 3.0 * spark;
       br *= smoothstep(0.0, 0.08, p.y) * smoothstep(1.0, 0.92, p.y); // hide the wrap
 
-      // biological register: enter partly-desaturated bio-green, reach electric
-      // cyan/green only mid-residency, leave cold and deep for abyssal
-      vec3 elec = mix(vec3(0.10, 0.96, 0.88), vec3(0.36, 1.0, 0.56), h3(fi + 11.0));
-      vec3 tint = mix(mix(vec3(0.30, 0.60, 0.40), vec3(0.14, 0.50, 0.56), res),
-                      elec, 0.25 + 0.75 * mid);
-      tint = mix(tint, vec3(0.81, 1.0, 0.95), 0.45 * min(spark, 1.0)); // aqua-white flick
+      // biological register: enter partly-desaturated bio-green, peak as living
+      // plankton-green only mid-residency, leave cold and deep for abyssal
+      vec3 peak = mix(vec3(0.13, 0.47, 0.48), vec3(0.19, 0.49, 0.42), h3(fi + 11.0));
+      vec3 tint = mix(mix(vec3(0.26, 0.46, 0.34), vec3(0.12, 0.42, 0.46), res),
+                      peak, 0.25 + 0.75 * mid);
+      tint = mix(tint, vec3(0.80, 0.88, 0.80), 0.45 * min(spark, 1.0)); // bone-white flick
 
       float d = length(uv - p);
       float k = core(d) * br;
-      // capped chroma: the hotter the core, the further it leans toward deep teal,
-      // so the bloomed edge reads #0B4A52-ish — never white-hot electric cyan
-      vec3 hot = mix(tint, vec3(0.13, 0.60, 0.68), clamp(k * 0.25, 0.0, 0.6));
+      // capped chroma: the hotter the core, the further it leans toward deep kelp
+      // teal, so the bloomed edge stays organic — never white-hot electric cyan
+      vec3 hot = mix(tint, vec3(0.11, 0.44, 0.48), clamp(k * 0.25, 0.0, 0.6));
       col += hot * k;
-      col += vec3(0.10, 0.52, 0.60) * (0.6 * br * uFog * halo(d)); // colder than the source
+      col += vec3(0.10, 0.40, 0.42) * (0.6 * br * uFog * halo(d)); // colder than the source
       col += tint * br * (trailGlow(uv, p, m) * 0.9 + trailGlow(uv, m, e) * 0.45);
     }
 

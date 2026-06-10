@@ -56,13 +56,24 @@ const fragmentShader = /* glsl */ `
     return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
   }
 
-  // the picture that was never a photograph
+  // the picture that was never a photograph — a risograph ink set, not a rainbow:
+  // the old cosine phase becomes a folded scalar walked through five banded inks
   vec3 img(vec2 p, float t){
     float n = 0.62 * noise(p * 1.6 + vec2(t * 0.05, -t * 0.03))
             + 0.38 * noise(p * 3.3 + vec2(9.1, 3.7) + t * 0.04);
     float m = noise(p * 3.1 - t * 0.04);
-    vec3 c = 0.5 + 0.5 * cos(6.2831 * (n * 0.8 + vec3(0.00, 0.33, 0.67)) + m * 2.2);
-    return c * c;                                     // squared: punchy, dark-friendly
+    // same animating term as before (n drifts, m shears), folded to a 0..1 triangle
+    float s = 1.0 - abs(2.0 * fract(n * 0.8 + m * 0.35) - 1.0);
+    vec3 charcoal = vec3(0.10, 0.10, 0.11);
+    vec3 ochre    = vec3(0.50, 0.38, 0.14);
+    vec3 moss     = vec3(0.22, 0.30, 0.16);
+    vec3 slate    = vec3(0.20, 0.26, 0.34);
+    vec3 bone     = vec3(0.62, 0.58, 0.50);
+    vec3 c = mix(charcoal, ochre, smoothstep(0.05, 0.25, s));
+    c = mix(c, moss,  smoothstep(0.30, 0.50, s));
+    c = mix(c, slate, smoothstep(0.55, 0.75, s));
+    c = mix(c, bone,  smoothstep(0.80, 0.95, s));
+    return c;
   }
 
   void main(){
@@ -99,7 +110,7 @@ const fragmentShader = /* glsl */ `
     col = mix(col, col.gbr, uGlitch * 0.6 * inSort);
     float gtick = floor(t * (2.0 + uFlow * 4.0));
     float tear = step(0.9975 - uGlitch * 0.015, hash(vec2(floor(vUv.y * 220.0), gtick)));
-    col += tear * uGlitch * vec3(0.5);
+    col += tear * uGlitch * vec3(0.32);
 
     col += uFog * 0.02 * vec3(0.30, 0.30, 0.33);
     col *= 1.0 - 0.50 * uDark;

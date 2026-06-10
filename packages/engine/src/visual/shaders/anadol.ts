@@ -85,9 +85,11 @@ const fragmentShader = /* glsl */ `
     float fill = 1.0 - smoothstep(level - 0.06, level + 0.10, yIn);
     lum *= fill;
 
-    // chroma: the archive remembers its colours when asked
+    // chroma: the archive remembers its colours when asked — a mineral arc,
+    // sandstone to glacial teal, the same animating term carrying the flow
     vec3 mono = vec3(0.72, 0.70, 0.66);
-    vec3 hue = 0.5 + 0.5 * cos(6.2831 * (m * 0.9 + ct * 0.25 + vec3(0.00, 0.33, 0.67)));
+    float hueT = 0.5 + 0.5 * cos(6.2831 * (m * 0.9 + ct * 0.25));
+    vec3 hue = mix(vec3(0.52, 0.45, 0.36), vec3(0.26, 0.38, 0.40), hueT);
     vec3 dataCol = mix(mono, hue, clamp(uChroma, 0.0, 1.0));
 
     vec3 col = dataCol * lum * inside * (1.0 + uSurge * 0.5);

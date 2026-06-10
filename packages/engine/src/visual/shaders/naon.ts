@@ -33,8 +33,8 @@ const vertexShader = /* glsl */ `
 `;
 
 // Plenitude — packed geometry (Manolo Gamboa Naon lineage): two stacked
-// generations of discs and rings spilling over their cells, saturated colour on
-// a deep plum ground, arranged densely enough to read as tissue. Every disc
+// generations of discs and rings spilling over their cells, earthen kiln colour
+// on a deep plum ground, arranged densely enough to read as tissue. Every disc
 // breathes about its own post on its own clock — the profusion wobbles like
 // something alive, nothing pops. Vivid holds the saturation; a transient
 // flushes a brighter, slightly swollen generation through. The arc drains the
@@ -52,14 +52,14 @@ const fragmentShader = /* glsl */ `
     return fract(sin(p) * 43758.5453);
   }
 
-  // Naon's inks: saturated, unapologetic (linear)
+  // Naon's inks: kiln-fired, earthen (linear)
   vec3 palette(float h){
-    vec3 c = vec3(0.78, 0.06, 0.26);                    // magenta-rose
-    c = mix(c, vec3(0.86, 0.30, 0.04), step(0.20, h));  // orange
-    c = mix(c, vec3(0.88, 0.72, 0.10), step(0.40, h));  // lemon
-    c = mix(c, vec3(0.02, 0.45, 0.50), step(0.60, h));  // turquoise
-    c = mix(c, vec3(0.06, 0.10, 0.55), step(0.78, h));  // ultramarine
-    c = mix(c, vec3(0.78, 0.76, 0.71), step(0.92, h));  // bone
+    vec3 c = vec3(0.45, 0.14, 0.16);                    // madder clay
+    c = mix(c, vec3(0.52, 0.25, 0.11), step(0.20, h));  // terracotta
+    c = mix(c, vec3(0.55, 0.42, 0.14), step(0.40, h));  // ochre
+    c = mix(c, vec3(0.10, 0.33, 0.33), step(0.60, h));  // sea glass
+    c = mix(c, vec3(0.12, 0.15, 0.32), step(0.78, h));  // slate indigo
+    c = mix(c, vec3(0.66, 0.62, 0.55), step(0.92, h));  // warm bone
     return c;
   }
 
@@ -103,7 +103,7 @@ const fragmentShader = /* glsl */ `
 
     // saturation is the instrument — the arc bleeds it away
     float luma = dot(col, vec3(0.299, 0.587, 0.114));
-    float sat = clamp(uVivid * (1.0 - 0.75 * uDark) + uBurst * 0.25, 0.0, 1.2);
+    float sat = clamp(uVivid * (1.0 - 0.75 * uDark) + uBurst * 0.25, 0.0, 1.2) * 0.85;
     col = mix(vec3(luma), col, sat);
 
     col *= 1.0 + uBurst * 0.35;
