@@ -32,14 +32,15 @@ const vertexShader = /* glsl */ `
   }
 `;
 
-// Axis — architectural light (Nonotak / UVA / 1024 lineage): a family of hard
-// SHORT light streaks — finite beam segments, each pitched between 45° and 90°
-// from the horizontal, travelling across the frame on its own drift while it
-// sequences on its own deterministic clock (the flash is the identity). Soft
-// caps end each streak; local haze hugs the bright cores. Pulse
-// (trigger-routed) flashes the streaks over the bloom threshold; width
-// breathes with the bass. The arc strips the rig — fewer, narrower streaks,
-// until one faint traveller remains.
+// Axis — architectural light (Nonotak / UVA / 1024 lineage), in two registers:
+// a dim family of INFINITE parallel planes sharing one slowly rotating axis
+// (the architecture), and over them a brighter rig of SHORT travelling
+// streaks — finite segments pitched between 45° and 90° from the horizontal,
+// drifting across the frame. Planes and streaks each sequence on their own
+// deterministic clocks (the flash is the identity). Pulse (trigger-routed)
+// flashes the streaks over the bloom threshold; width breathes both registers
+// with the bass. The arc strips the rig — fewer, narrower lights — until one
+// faint traveller crosses a single pale plane.
 const fragmentShader = /* glsl */ `
   precision highp float;
   uniform float uTime;
@@ -54,11 +55,28 @@ const fragmentShader = /* glsl */ `
     vec2 P = vec2(vUv.x * aspect, vUv.y);
     float t = uTime;
 
+    float v = 0.0;
+    float g = 0.0;
+
+    // ---- register one: the infinite planes — dim, slow, architectural ----
+    vec2 pc = (vUv - 0.5) * vec2(aspect, 1.0);
+    float pAng = t * (0.02 + uFlow * 0.10) + 0.6; // glacial shared rotation
+    float pS = dot(pc, vec2(cos(pAng), sin(pAng)));
+    float pFreq = mix(mix(2.5, 6.0, uDepth), 1.6, uDark * 0.7);
+    float pX = pS * pFreq;
+    float pCell = floor(pX + 0.5);
+    float pFx = pX - pCell;
+    float pW = mix(0.05, 0.22, uWidth) * (1.0 - 0.4 * uDark);
+    float pHard = 1.0 - smoothstep(pW * 0.5, pW * 0.5 + 0.02, abs(pFx));
+    float pGlow = exp(-abs(pFx) * 9.0);
+    float pSeq = 0.45 + 0.55 * step(0.38, hash(vec2(pCell, floor(t * (0.4 + uFlow * 1.8) + hash(vec2(pCell, 9.1)) * 4.0))));
+    v += pHard * pSeq * 0.4 + pGlow * 0.05 * (0.4 + 0.6 * pSeq); // the dim base layer
+    g += pGlow * 0.02;
+
+    // ---- register two: the short streaks running over the planes ----
     float count = mix(4.0, 7.0, uDepth) * (1.0 - 0.5 * uDark); // the arc strips the rig
     float travel = 0.04 + uFlow * 0.20;
     float wBase = mix(0.02, 0.06, uWidth) * (1.0 - 0.35 * uDark);
-    float v = 0.0;
-    float g = 0.0;
     // branch-free fixed loop: streaks beyond the count contribute zero via on
     for (int i = 0; i < 7; i++){
       float fi = float(i);
