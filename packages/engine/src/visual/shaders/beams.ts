@@ -33,12 +33,13 @@ const vertexShader = /* glsl */ `
 `;
 
 // Axis — architectural light (Nonotak / UVA / 1024 lineage): a family of hard
-// parallel light-planes sharing one slowly rotating axis, each plane sequencing
-// on its own deterministic clock, volumetric haze hugging the bright edges.
-// Geometry, not weather: the frame is organised by a single angle. Pulse
-// (trigger-routed) flashes the bars over the bloom threshold; width breathes
-// with the bass. The arc strips the rig down — fewer, narrower planes, until
-// one faint axis remains.
+// SHORT light streaks — finite beam segments, each pitched between 45° and 90°
+// from the horizontal, travelling across the frame on its own drift while it
+// sequences on its own deterministic clock (the flash is the identity). Soft
+// caps end each streak; local haze hugs the bright cores. Pulse
+// (trigger-routed) flashes the streaks over the bloom threshold; width
+// breathes with the bass. The arc strips the rig — fewer, narrower streaks,
+// until one faint traveller remains.
 const fragmentShader = /* glsl */ `
   precision highp float;
   uniform float uTime;
@@ -50,31 +51,45 @@ const fragmentShader = /* glsl */ `
 
   void main(){
     float aspect = uResolution.x / max(uResolution.y, 1.0);
-    vec2 p = (vUv - 0.5) * vec2(aspect, 1.0);
+    vec2 P = vec2(vUv.x * aspect, vUv.y);
+    float t = uTime;
 
-    // one shared axis, rotating glacially; +0.6 phase composes the t=0 still
-    float ang = uTime * (0.02 + uFlow * 0.10) + 0.6;
-    float s = dot(p, vec2(cos(ang), sin(ang)));
+    float count = mix(4.0, 7.0, uDepth) * (1.0 - 0.5 * uDark); // the arc strips the rig
+    float travel = 0.04 + uFlow * 0.20;
+    float wBase = mix(0.02, 0.06, uWidth) * (1.0 - 0.35 * uDark);
+    float v = 0.0;
+    float g = 0.0;
+    // branch-free fixed loop: streaks beyond the count contribute zero via on
+    for (int i = 0; i < 7; i++){
+      float fi = float(i);
+      float on = step(fi + 0.5, count + 0.5);
+      vec2 h = vec2(hash(vec2(fi, 1.3)), hash(vec2(fi, 7.7)));
+      // pitch locked between 45° and 90° from horizontal (PI/4 .. PI/2)
+      float ang = mix(0.7854, 1.5708, hash(vec2(fi, 3.9)));
+      vec2 u = vec2(cos(ang), sin(ang));
+      // each streak drifts across the frame — mostly sideways, a slow rise.
+      // The wrap-space margins are PROPORTIONAL to the frame (a portrait frame
+      // is barely half a unit wide — absolute margins would park most of the
+      // travel off-screen); phase offsets compose the t=0 still in-frame.
+      float cx = (fract(h.x + t * travel * (0.5 + h.y)) * 1.3 - 0.15) * aspect;
+      float cy = fract(h.y + t * travel * 0.3 * (0.3 + h.x)) * 1.2 - 0.1;
+      float len = mix(0.22, 0.5, hash(vec2(fi, 5.1))) * (1.0 + 0.3 * uDepth);
+      // finite segment: hard core between soft end-caps, tight local haze
+      vec2 d = P - vec2(cx, cy);
+      float along = abs(dot(d, u));
+      float perp = abs(dot(d, vec2(-u.y, u.x)));
+      float cap = 1.0 - smoothstep(len * 0.5 - 0.05, len * 0.5 + 0.06, along);
+      float core = (1.0 - smoothstep(wBase * 0.5, wBase * 0.5 + 0.012, perp)) * cap;
+      // the per-streak flash sequencing — each gates on its own clock
+      float seq = 0.4 + 0.6 * step(0.38, hash(vec2(fi, floor(t * (0.5 + uFlow * 2.2) + h.x * 4.0))));
+      v += on * core * seq * (0.7 + uPulse * 1.2); // the flash carries it into bloom
+      g += on * exp(-perp * 14.0) * cap * 0.03 * (0.4 + 0.6 * seq);
+    }
+    v = min(v, 1.1);
 
-    // plane family: count falls as the arc strips the rig
-    float freq = mix(mix(2.5, 7.0, uDepth), 1.6, uDark * 0.7);
-    float x = s * freq;
-    float cell = floor(x + 0.5);
-    float fx = x - cell; // signed distance to the nearest plane's centre line
-
-    float w = mix(0.05, 0.24, uWidth) * (1.0 - 0.4 * uDark);
-    float hard = 1.0 - smoothstep(w * 0.5, w * 0.5 + 0.02, abs(fx));
-    float glow = exp(-abs(fx) * 9.0);
-
-    // per-plane sequencing — each plane gates on its own deterministic clock
-    float seq = 0.45 + 0.55 * step(0.38, hash(vec2(cell, floor(uTime * (0.4 + uFlow * 1.8) + hash(vec2(cell, 9.1)) * 4.0))));
-
-    float v = hard * seq * 0.85 + glow * 0.08 * (0.4 + 0.6 * seq);
-    v *= 1.0 + uPulse * 1.4 * hard;   // the transient flash — bars cross into bloom
-
-    vec3 cold = vec3(0.55, 0.66, 0.85);              // cold white-blue planes (linear)
-    vec3 col = cold * v;
-    col += uFog * 0.05 * vec3(0.25, 0.32, 0.45) * glow; // haze hugs the light
+    vec3 cold = vec3(0.55, 0.66, 0.85);              // cold white-blue light (linear)
+    vec3 col = cold * (v + g);
+    col += uFog * 0.04 * vec3(0.25, 0.32, 0.45);
     col *= 1.0 - 0.5 * uDark;
 
     gl_FragColor = vec4(col, 1.0);

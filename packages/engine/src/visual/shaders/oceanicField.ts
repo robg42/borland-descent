@@ -19,6 +19,8 @@ export const descriptor: VisualModuleDescriptor = {
     { key: 'depth', kind: 'unipolar', min: 0, max: 1, default: 0.15, group: 'field' },
     { key: 'glint', kind: 'unipolar', min: 0, max: 1, default: 0.5, group: 'scene' },
     { key: 'sun', kind: 'unipolar', min: 0, max: 1, default: 0.5, group: 'scene' },
+    // the school: population of geometric swimmers silhouetted against the light
+    { key: 'school', kind: 'unipolar', min: 0, max: 1, default: 0.45, group: 'scene' },
   ],
 };
 
@@ -40,7 +42,7 @@ const fragmentShader = /* glsl */ `
   precision highp float;
   uniform float uTime;
   uniform vec2 uResolution;
-  uniform float uFog, uFlow, uDepth, uDark, uGlint, uSun;
+  uniform float uFog, uFlow, uDepth, uDark, uGlint, uSun, uSchool;
   varying vec2 vUv;
 
   // Per-cell random 2-vector — the same sin-hash family as the sibling passes.
@@ -72,6 +74,37 @@ const fragmentShader = /* glsl */ `
   float net(vec2 p, float clk, float width, float sharp){
     vec2 F = voronoiF(p, clk);
     return pow(1.0 - smoothstep(0.0, width, F.y - F.x), sharp);
+  }
+
+  // The swimmers are GEOMETRY, not fish: a rhombus dart, a triangle, a slat —
+  // normalised signed distances so one edge rule cuts all three hard.
+  float swimmerSDF(vec2 q, float kind, float s){
+    if (kind < 0.34) {
+      return abs(q.x) / (s * 1.9) + abs(q.y) / (s * 0.8) - 1.0;          // rhombus dart
+    } else if (kind < 0.67) {
+      return max(q.x / (s * 1.7) + abs(q.y) / (s * 0.8) - 0.6,
+                 -q.x / (s * 1.2) - 0.8);                                 // triangle
+    }
+    return max(abs(q.x) / (s * 1.6), abs(q.y) / (s * 0.5)) - 1.0;        // slat
+  }
+
+  // One layer of the school: a sparse cell-hashed shoal swimming horizontally,
+  // undulating as a body, each shape flicking about its own swim axis.
+  float school(vec2 P, float t, float seed, float scale, float pop){
+    float dir = seed < 0.5 ? 1.0 : -1.0;
+    vec2 q = P * scale + vec2(-dir * t * (0.35 + seed * 0.3), 0.0) + seed * 19.0;
+    q.y += 0.18 * sin(q.x * 0.9 + t * 0.5 + seed * 6.0); // the shoal undulates
+    vec2 id = floor(q);
+    vec2 f = fract(q) - 0.5;
+    vec2 h = vec2(hash2(id + seed).x, hash2(id + 4.7).y);
+    if (h.x > pop) return 0.0;                            // sparse — most cells empty
+    vec2 ctr = (h - 0.5) * 0.5;
+    float wob = 0.3 * sin(t * (1.2 + h.y) + h.x * 6.2831); // the swimming flick
+    float ca = cos(wob), sa = sin(wob);
+    vec2 ql = mat2(ca, -sa, sa, ca) * (f - ctr);
+    ql.x *= dir;                                          // darts point where they swim
+    float d = swimmerSDF(ql, h.y, 0.10 + 0.10 * hash2(id + 9.3).x);
+    return 1.0 - smoothstep(-0.05, 0.08, d);
   }
 
   void main(){
@@ -144,6 +177,16 @@ const fragmentShader = /* glsl */ `
 
     // The sun itself, paling as the arc carries the surface away.
     col += CORE * (1.5 * disc + 0.30 * glare) * (1.0 - 0.75 * uDark);
+
+    // The school: geometric shapes swimming between us and the light, read as
+    // dark silhouettes against the bright skin (fish, seen from below). Two
+    // parallax layers cross in opposite directions; the descent leaves them
+    // behind near the surface.
+    float swimT = uTime * (0.4 + 0.8 * uFlow);
+    float fish = school(P, swimT, 0.27, 3.2, uSchool * 0.45)
+               + 0.6 * school(P, swimT, 0.81, 5.4, uSchool * 0.5);
+    fish = min(fish, 1.0) * (1.0 - 0.8 * uDark);
+    col = mix(col, vec3(0.016, 0.10, 0.13), fish * 0.85);
 
     // Underwater haze: milk gathers in the light, strongest round the glare.
     col = mix(col, MILK, uFog * (0.12 + 0.25 * glare));

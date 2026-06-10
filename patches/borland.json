@@ -112,7 +112,7 @@
         "reverbSize": 0.85,
         "voices": { "maxPolyphony": 8 }
       },
-      "visualParams": { "fog": 0.25, "flow": 0.45, "depth": 0.15, "glint": 0.5, "sun": 0.5, "bloomStrength": 0.95, "bloomRadius": 0.55, "bloomThreshold": 0.72, "grainIntensity": 0.06 },
+      "visualParams": { "fog": 0.25, "flow": 0.45, "depth": 0.15, "glint": 0.5, "sun": 0.5, "school": 0.45, "bloomStrength": 0.95, "bloomRadius": 0.55, "bloomThreshold": 0.72, "grainIntensity": 0.06 },
       "gestureMap": [
         { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
         { "gesture": "touchX", "output": "gesture.touchX" },
