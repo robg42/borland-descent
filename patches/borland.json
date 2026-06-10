@@ -268,7 +268,7 @@
       { "id": "dryBus", "kind": "bus", "params": { "gain": 0.95 } },
       { "id": "wetBus", "kind": "bus", "params": { "gain": 0.85 } },
       { "id": "padDry", "kind": "bus", "params": { "gain": 0.32 } },
-      { "id": "reverb", "kind": "effect", "moduleId": "reverb", "params": { "size": 0.85, "wet": 1 } },
+      { "id": "reverb", "kind": "effect", "moduleId": "reverb", "params": { "size": 0.85, "wet": 1 }, "ir": "/ir/york-minster.wav" },
       { "id": "reverbHP", "kind": "effect", "moduleId": "highpass", "params": { "frequency": 280 } },
       { "id": "shimmer", "kind": "effect", "moduleId": "shimmer", "params": { "pitch": 12, "feedback": 0.35, "windowSize": 0.1, "decay": 5, "level": 0.22 } },
       { "id": "tape", "kind": "effect", "moduleId": "tapeWarmth", "params": { "drive": 1.4, "flutterDepth": 0.15, "flutterRate": 4, "hfCutoff": 6500, "hiss": 0.0015, "crush": 12 } },
