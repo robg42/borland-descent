@@ -1,8 +1,10 @@
 # Borland Descent — Improvement Plan
 
-**Date:** 2026-06-10 · **Basis:** [REVIEW.md](./REVIEW.md) (finding ids H1–H4,
-M1–M12, L1–L10 referenced throughout) · **Status: awaiting approval — no feature
-code until this plan is signed off.**
+**Date:** 2026-06-10 · **Basis:** [REVIEW.md](./REVIEW.md) (finding ids H1–H5,
+M1–M12, L1–L10 referenced throughout) · **Status: APPROVED 2026-06-10** (open
+questions answered — see Decisions at the end). Amended same day with C-0
+(scene visual identity, finding H5) per client direction: "significantly more
+diversity in the visuals — all stylistically different."
 
 ## Ground rules carried into every workstream
 
@@ -27,6 +29,7 @@ code until this plan is signed off.**
 | **P0** | Host master limiter + gain-staging fix | B | H1 |
 | **P0** | Ramped (dezippered) crossfade + param writes | B | H2, M1 |
 | **P0** | Single shared renderer; one composer; crossfade as a blend pass | C | H3 |
+| **P0** | Scene visual identity: seven stylistically distinct looks per [ART-DIRECTION.md](./ART-DIRECTION.md); wire `scene.visualParams` + per-scene post overrides | C | H5 |
 | **P1** | Sequencer studio UI (pattern editor) + port-target tracks | A | — |
 | **P1** | Voice stealing + one voice budget across composer/sequencer | B | M4 |
 | **P1** | In-worklet param smoothing; worklet nits | B | M2, L3, L4 |
@@ -204,6 +207,31 @@ clear unsupported message instead of hanging on "loading…".
 
 ## Workstream C — Visual engine
 
+**P0 — scene visual identity (H5, client mandate).** All seven scenes currently
+share one technique family (5-octave fbm wash), one copy-pasted grade, one
+blue-teal palette and one drift motion — see REVIEW §4.4. C rebuilds each
+scene's layer shader to its own designed identity per
+[ART-DIRECTION.md](./ART-DIRECTION.md): each scene owns a distinct hue family,
+compositional geometry, motion verb and luminance key (assigned axes:
+caustic net / light shafts / refractive split / snow-and-silhouettes /
+bioluminescent constellation / looming mass / vortex). Enablers built first:
+
+- Wire `scene.visualParams` into the layer (merged over the global layer-node
+  params) and add per-scene post overrides (bloom strength/radius/threshold,
+  grain intensity) — un-deadens the schema (REVIEW §2.2) and lets each look
+  own its grade.
+- Delete the cloned fog/vignette/darkening footer from the shaders; each scene
+  grades itself.
+- Keep the `field.fog` / `field.flow` / `field.depth` port vocabulary on every
+  layer (global matrix routes must keep working); up to 2 scene-specific ports
+  each.
+
+Acceptance: at 128 px thumbnails, any two scenes are instantly distinguishable
+(different dominant hue + structure); each scene reads as a composed still
+under `prefers-reduced-motion`; the descent's luminance still falls
+monotonically surface→centre; per-scene screenshots captured in the verify
+pass; frame budget held on the C-P1 instrumentation.
+
 **P0 — one renderer (H3).** Refactor `VisualEngine` so the host owns a single
 `WebGLRenderer` + `EffectComposer`; a scene contributes its shader layer (and
 arc/uniform bindings) rather than a whole pipeline. Crossfade becomes a blend
@@ -256,16 +284,14 @@ pixel-identical (verified by eye against each scene).
   hall IR, studio panel) should be committed first so workstream branches have a
   stable base — see open question 3.
 
-## Open questions (answer with your approval)
+## Decisions (approved 2026-06-10)
 
-1. **Sequences per scene vs global:** the schema supports both (`sceneId?`);
-   default authoring in the studio will be **scene-bound** (my recommendation —
-   sequences crossfade with their world). OK?
-2. **Background audio policy (M3):** recommend *keep playing + low-rate control
-   tick* (it's a music app). Alternative: fade-and-suspend per CLAUDE.md's
-   original budget note. Which?
-3. **The dirty tree:** may I commit the in-flight samples/resynthesis work as-is
-   (it typechecks, lints and tests green) as one or two commits before Phase 3?
-4. **cathedral.zip (L6):** extract the cathedral WAV (a few MB, wired into the
-   reverb node's `ir`) or remove the asset until samples ship? Extract is my
-   recommendation.
+1. **Sequences are scene-bound by default** (`sceneId` set on authoring;
+   global sequences remain possible via the schema).
+2. **Background policy: keep audio playing when hidden**, with a low-rate
+   (≈4 Hz) fallback tick driving `matrix.evaluateControl` + crossfade advance
+   while rAF is stopped; visuals stay paused. CLAUDE.md's budget note will be
+   updated to match.
+3. **In-flight samples/resynthesis work: commit before Phase 3** branches off.
+4. **cathedral.zip: extract the WAV, convert to a lean format, wire it** into
+   the reverb node's `ir`, keep attribution, and never commit the zip.

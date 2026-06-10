@@ -90,6 +90,13 @@ modules, so consolidating first reduces the surface it must conform to.
   hardcodes the topology and reads only node `params`. The connections array is
   effectively documentation (it is accurate documentation — verified against the
   built graph — but nothing enforces that).
+- **`scene.visualParams` is parsed but never read.** `VisualEngine` takes its
+  layer params from the single global `visualGraph.layers[0]` node and its
+  bloom/grain settings from the global `postChain` nodes
+  ([visualEngine.ts:109-148](../packages/engine/src/visual/visualEngine.ts));
+  `opts.scene.visualParams` is never consulted (and is `{}` for every scene in
+  the canonical patch). Per-scene visual tuning is therefore structurally
+  impossible today — a direct cause of H5 below.
 
 This is a known, deliberate v1 seam (the data-driven graph is a separate
 initiative), but it is the kind of drift that misleads contributors and it
@@ -275,6 +282,33 @@ passive/cleanup hygiene.
   there is no `touch-action` CSS guard on the canvas container, so one-finger
   drag vs. page gestures on iOS deserves an on-device verification pass.
 
+### 4.4 Visual monoculture — the scenes don't look different enough
+
+Reading all seven shaders side by side, the "seven structurally different
+worlds" promise is not delivered visually; the scenes are parameter variations
+of one look. Concretely:
+
+- **One technique family.** Six of seven are the same 5-octave value-noise
+  `fbm` wash at near-identical spatial scale (`p × 3–4`) with a small additive
+  accent (veins / bands / snow / points / horizon / glow). Only `abyss` changes
+  the domain (log-polar).
+- **One colour grade, copy-pasted.** Every shader ends with the same three
+  lines: an additive blue `uFog` haze, a `mix(1.0, ~0.3, uDark)` global
+  darkening, and the same centred vignette. Seven scenes, one grade.
+- **One palette family.** Desaturated blue-teal in the ~0.01–0.4 luminance
+  range everywhere except `abyss` (dark ember). Nothing bright, nothing
+  saturated, nothing achromatic — so the global bloom (one shared
+  strength/threshold for all scenes) reads identically everywhere.
+- **One motion signature.** Every scene advances at
+  `t = uTime * (0.03–0.06 + flow·k)` — the same slow drift; no scene owns a
+  distinct motion (pulse, fall, rotation, stillness).
+- **No per-scene tuning channel.** Because `scene.visualParams` and per-scene
+  post settings are unwired (§2.2), even the existing knobs cannot
+  differentiate scenes.
+
+This is a product-level gap (the scenes are the product), recorded as **H5**.
+
+
 ---
 
 ## 5. Production readiness gaps
@@ -298,6 +332,10 @@ passive/cleanup hygiene.
 - H2 Crossfade gains stepped per rAF frame (zipper; stalls when hidden) — sceneInstance.ts:94, engine.ts:61.
 - H3 Two renderers + two UnrealBloom chains during every crossfade; 7 contexts per descent — visualEngine.ts:80.
 - H4 No safe-area insets on the full-bleed player UI — app/src/ui.css.
+- H5 Visual monoculture: all seven scenes share one technique family, one
+  copy-pasted colour grade, one palette family and one motion signature, and
+  `scene.visualParams` / per-scene post settings are unwired so they cannot be
+  differentiated by data — §4.4, visualEngine.ts:109.
 
 **Medium**
 - M1 Control-rate writes set `AudioParam.value` directly (no dezipper at the param level) — all `write()` closures.
