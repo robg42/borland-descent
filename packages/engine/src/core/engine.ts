@@ -10,6 +10,7 @@ import { macrosAt } from './arc';
 import { Matrix, restoreDroppedControlTargets } from '../modulation/matrix';
 import { GestureController } from '../gesture/gesture';
 import { SceneInstance } from './sceneInstance';
+import { VisualHost, type MountArgs } from '../visual/host';
 
 /**
  * The engine consumes a validated Patch and renders it. Framework-agnostic: the
@@ -37,7 +38,7 @@ export class Engine {
   private readonly transport = new Transport();
   private readonly rng: Rng;
   private readonly reducedMotion: boolean;
-  private readonly container?: HTMLElement;
+  private host: VisualHost | null = null;
   private active: SceneInstance | null = null;
   private masterBus: Tone.Gain | null = null;
   private gesture: GestureController | null = null;
@@ -67,7 +68,6 @@ export class Engine {
   constructor(opts: EngineOptions) {
     this.patch = opts.patch;
     if (opts.patch.scenes.length === 0) throw new Error('Patch has no scenes');
-    this.container = opts.container;
     this.autoScene = opts.autoScene ?? false;
     this.onSceneChange = opts.onSceneChange;
     this.routes = opts.patch.modulationMatrix;
@@ -94,10 +94,43 @@ export class Engine {
       this.gesture = new GestureController(opts.container);
       this.gesture.setArcPosition(this.manualArc); // preserve arc across a scene rebuild
       this.gesture.registerPorts(this.registry);
+      // ONE renderer for the whole engine (V1 rebuild) — scenes mount layers into it.
+      this.host = new VisualHost({ container: opts.container, reducedMotion: this.reducedMotion });
       this.active = this.makeScene(this.activeIndex, this.registry);
+      this.host.mountActive(this.visualArgs(this.activeIndex, this.registry));
       // a still, inviting first frame before audio is unlocked
-      this.active.renderStill(this.arcPosition);
+      this.host.setArc(this.darkness(this.arcPosition));
+      this.host.render(0, 0);
     }
+  }
+
+  /** Arc darkness at a position — the structural driver every visual layer reads. */
+  private darkness(position: number): number {
+    return macrosAt(this.patch.dna.arc, position).darkness;
+  }
+
+  /** Assemble a scene's VisualHost mount: module id, merged params, post grade. */
+  private visualArgs(index: number, registry: SignalRegistry): MountArgs {
+    const scene = this.patch.scenes[index]!;
+    const layerNode = this.patch.visualGraph.layers[0];
+    const sv = scene.visualParams;
+    const num = (v: unknown, f: number): number => (typeof v === 'number' ? v : f);
+    const post = (id: string): Record<string, unknown> =>
+      this.patch.visualGraph.postChain.find((n) => n.id === id)?.params ?? {};
+    const bloom = post('bloom');
+    const grain = post('grain');
+    return {
+      moduleId: scene.shaderModuleId,
+      nodeId: layerNode?.id ?? 'field',
+      registry,
+      params: { ...(layerNode?.params ?? {}), ...sv },
+      grade: {
+        bloomStrength: num(sv.bloomStrength, num(bloom.strength, 0.8)),
+        bloomRadius: num(sv.bloomRadius, num(bloom.radius, 0.4)),
+        bloomThreshold: num(sv.bloomThreshold, num(bloom.threshold, 0.85)),
+        grainIntensity: num(sv.grainIntensity, num(grain.intensity, 0.05)),
+      },
+    };
   }
 
   /** The currently active scene. In autoScene mode this changes as the arc descends. */
@@ -111,8 +144,6 @@ export class Engine {
       scene: this.patch.scenes[index]!,
       registry,
       rng: this.rng,
-      container: this.container,
-      reducedMotion: this.reducedMotion,
     });
   }
 
@@ -175,8 +206,7 @@ export class Engine {
     this.gesture?.registerPorts(reg);
     this.registerArcPorts(reg);
     const incoming = this.makeScene(index, reg);
-    incoming.setOpacity(0); // starts hidden; blooms in as the crossfade advances
-    incoming.renderStill(this.arcPosition);
+    this.host?.mountIncoming(this.visualArgs(index, reg)); // renders at blend mix 0
     this.incoming = incoming;
     this.incomingRegistry = reg;
     this.onSceneChange?.(this.patch.scenes[index]!); // announce the scene being entered
@@ -206,8 +236,7 @@ export class Engine {
     const quarter = (t * Math.PI) / 2;
     this.active?.setLevel(Math.cos(quarter)); // equal-power: constant loudness mid-fade
     this.incoming.setLevel(Math.sin(quarter));
-    this.active?.setOpacity(1 - t);
-    this.incoming.setOpacity(t);
+    this.host?.setFadeMix(t); // one composer: blend pass + lerped post grade
     if (t >= 1) this.completeCrossfade();
   }
 
@@ -222,6 +251,7 @@ export class Engine {
     }
     this.matrix?.dispose();
     this.active?.dispose();
+    this.host?.completeFade();
     this.active = incoming;
     this.activeIndex = this.incomingIndex;
     const oldReg = this.registry;
@@ -232,7 +262,6 @@ export class Engine {
     this.incomingReady = false;
     this.transitioning = false;
     this.active.setLevel(1);
-    this.active.setOpacity(1);
     this.matrix = new Matrix(this.routes, this.registry);
     this.matrix.setup();
   }
@@ -245,7 +274,7 @@ export class Engine {
     this.incomingReady = false;
     this.transitioning = false;
     this.active?.setLevel(1);
-    this.active?.setOpacity(1);
+    this.host?.abortFade();
   }
 
   /** Unlock audio (MUST be inside a user gesture), build the audio graph + matrix. */
@@ -363,10 +392,10 @@ export class Engine {
       this.advanceCrossfade(dt);
       this.active?.applyArc(pos);
       this.incoming?.applyArc(pos);
+      this.host?.setArc(this.darkness(pos));
       this.matrix?.evaluateControl(dt);
       const time = this.reducedMotion ? 0 : this.transport.seconds;
-      this.active?.render(time, dt);
-      this.incoming?.render(time, dt);
+      this.host?.render(time, dt);
       this.rafId = requestAnimationFrame(tick);
     };
     this.rafId = requestAnimationFrame(tick);
@@ -392,6 +421,7 @@ export class Engine {
     this.incoming?.dispose();
     this.masterBus?.dispose();
     this.gesture?.dispose();
+    this.host?.dispose();
     this.registry.clear();
   }
 }

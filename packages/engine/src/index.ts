@@ -10,7 +10,8 @@ export { Transport } from './core/transport';
 export type { TransportClock, TransportState, TransportPosition } from './core/transport';
 export { smoothWrite } from './core/params';
 export type { SmoothableParam } from './core/params';
-export { VisualEngine } from './visual/visualEngine';
+export { VisualHost } from './visual/host';
+export type { VisualHostOptions, MountArgs, PostGrade } from './visual/host';
 
 // Visual module contract (VISUAL-REBUILD V1): descriptors drive the generated
 // registry bindings, studio panels and routing targets.

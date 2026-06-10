@@ -3,33 +3,30 @@ import type { Patch, Scene } from '../patch/schema';
 import type { SignalRegistry } from './registry';
 import type { Rng } from './rng';
 import { AudioEngine } from '../audio/audioEngine';
-import { VisualEngine } from '../visual/visualEngine';
 
 export interface SceneInstanceOptions {
   patch: Patch;
   scene: Scene;
   registry: SignalRegistry;
   rng: Rng;
-  container?: HTMLElement;
-  reducedMotion: boolean;
 }
 
 /**
- * One scene, made real: its own VisualEngine and (after build()) AudioEngine, each
- * registering its ports into the shared registry. The Engine hosts exactly one of
- * these today — but holding two and blending between them is the §18.2 crossfade
- * seam this carve-out opens, since the Engine no longer owns audio/visual directly.
+ * One scene's AUDIO, made real (V1 rebuild: the visual side now lives in the
+ * shared VisualHost — one renderer for the whole engine — so this carve-out is
+ * audio-only). After build() the AudioEngine registers its ports into the
+ * shared registry; the host Engine mounts the scene's visual layer into the
+ * VisualHost against the same registry, and ramps this instance's scene gain
+ * to crossfade it against another scene (§18.2).
  *
- * The visual is created up front so the player can show a still, inviting first frame
- * before audio is unlocked; the audio graph is built on build(), inside the user
- * gesture (the reverb impulse and the tape worklet load there).
+ * The audio graph is built on build(), inside the user gesture (the reverb
+ * impulse and the tape worklet load there).
  */
 export class SceneInstance {
   readonly scene: Scene;
   private readonly patch: Patch;
   private readonly registry: SignalRegistry;
   private readonly rng: Rng;
-  private visual: VisualEngine | null = null;
   private audio: AudioEngine | null = null;
   private sceneGain: Tone.Gain | null = null;
   private disposed = false;
@@ -39,15 +36,6 @@ export class SceneInstance {
     this.scene = opts.scene;
     this.registry = opts.registry;
     this.rng = opts.rng;
-    if (opts.container) {
-      this.visual = new VisualEngine({
-        patch: opts.patch,
-        scene: opts.scene,
-        registry: opts.registry,
-        container: opts.container,
-        reducedMotion: opts.reducedMotion,
-      });
-    }
   }
 
   /** Build the audio graph (async: reverb IR + tape worklet). Inside a user gesture. */
@@ -71,21 +59,9 @@ export class SceneInstance {
     return this.sceneGain;
   }
 
-  /** Apply arc macros to both the audio feel and the visual feel for this frame. */
+  /** Apply arc macros to the audio feel for this frame (visuals: VisualHost.setArc). */
   applyArc(position: number): void {
     this.audio?.applyArc(position);
-    this.visual?.applyArc(position);
-  }
-
-  /** Render one visual frame. Transport time is shared and passed in by the host. */
-  render(timeSeconds: number, deltaSeconds: number): void {
-    this.visual?.render(timeSeconds, deltaSeconds);
-  }
-
-  /** The inviting pre-audio frame: apply the arc and draw a single still frame. */
-  renderStill(position: number): void {
-    this.visual?.applyArc(position);
-    this.visual?.render(0, 0);
   }
 
   /** Set this scene's audio level instantly (0..1). The host ramps it per frame to
@@ -94,16 +70,10 @@ export class SceneInstance {
     if (this.sceneGain) this.sceneGain.gain.value = v;
   }
 
-  /** Set this scene's visual opacity (0..1) — the host blends two scenes' canvases. */
-  setOpacity(v: number): void {
-    this.visual?.setOpacity(v);
-  }
-
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.audio?.dispose();
     this.sceneGain?.dispose();
-    this.visual?.dispose();
   }
 }
