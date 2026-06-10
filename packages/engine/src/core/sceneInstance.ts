@@ -3,6 +3,7 @@ import type { Patch, Scene } from '../patch/schema';
 import type { SignalRegistry } from './registry';
 import type { Rng } from './rng';
 import { AudioEngine } from '../audio/audioEngine';
+import type { SynthModule } from '../audio/synths/types';
 
 export interface SceneInstanceOptions {
   patch: Patch;
@@ -67,6 +68,11 @@ export class SceneInstance {
   /** Per-frame feature refresh (bands/flux/onset) — before the matrix reads. */
   tick(dt: number): void {
     this.audio?.tickFeatures(dt);
+  }
+
+  /** Look up a synth by audioGraph nodeId. Used by the sequencer. Null before build(). */
+  getSynth(nodeId: string): SynthModule | null {
+    return this.audio?.getSynth(nodeId) ?? null;
   }
 
   /** Ramp this scene's audio level to `v` (0..1) over one frame (~16 ms). The per-frame

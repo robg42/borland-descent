@@ -61,3 +61,6 @@ export { SYNTH_MODULE_IDS } from './audio/synths';
 
 // Visual-module ids (for the studio's per-scene module picker)
 export { VISUAL_MODULE_IDS } from './visual/shaders';
+
+// Sequencer runtime (eventsInWindow + scheduler)
+export { eventsInWindow, Sequencer } from './sequencer';

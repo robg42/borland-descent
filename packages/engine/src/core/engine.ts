@@ -11,6 +11,8 @@ import { Matrix, restoreDroppedControlTargets } from '../modulation/matrix';
 import { GestureController } from '../gesture/gesture';
 import { SceneInstance } from './sceneInstance';
 import { VisualHost, type MountArgs } from '../visual/host';
+import { Sequencer } from '../sequencer/scheduler';
+import type { SequenceWindowContext } from '../sequencer/types';
 
 /**
  * The engine consumes a validated Patch and renders it. Framework-agnostic: the
@@ -42,6 +44,7 @@ export class Engine {
   private active: SceneInstance | null = null;
   private masterBus: Tone.Gain | null = null;
   private hostLimiter: Tone.Limiter | null = null;
+  private sequencer: Sequencer | null = null;
   private gesture: GestureController | null = null;
   private matrix: Matrix | null = null;
   private routes: ModulationRoute[];
@@ -163,6 +166,25 @@ export class Engine {
       registry,
       rng: this.rng,
     });
+  }
+
+  /** Build a SequenceWindowContext for the given scene index. */
+  private seqCtx(_index: number): SequenceWindowContext {
+    const { dna } = this.patch;
+    const seed = this.patch.meta.seed;
+    return {
+      bpm: this.transport.bpm,
+      scale: dna.rootPitchClasses,
+      keyCentre: dna.keyCentre,
+      octaveBaseMidi: 36 + dna.keyCentre,
+      rngForLoop: (loopIdx) => {
+        let s = (seed ^ loopIdx) >>> 0;
+        return () => {
+          s = (Math.imul(1664525, s) + 1013904223) >>> 0;
+          return s / 0xffffffff;
+        };
+      },
+    };
   }
 
   /** Register all host-level output ports (arc macros + perf) into a registry.
@@ -341,6 +363,18 @@ export class Engine {
     this.matrix.setup();
     this.transport.start();
     this.active.startComposer();
+    // Start the sequencer — plays any authored sequences in the patch.
+    if (this.patch.sequences.length > 0) {
+      const activeScene = this.active;
+      this.sequencer = new Sequencer({
+        sequences: this.patch.sequences,
+        transport: this.transport,
+        registry: this.registry,
+        getSynth: (nodeId) => activeScene.getSynth(nodeId),
+        ctx: this.seqCtx(this.activeIndex),
+      });
+      this.sequencer.start();
+    }
     this.onSceneChange?.(this.scene);
     this.running = true;
     if (typeof document !== 'undefined') {
@@ -497,6 +531,7 @@ export class Engine {
     this.stopLoop();
     this.stopBgTick();
     this.transport.stop();
+    this.sequencer?.dispose();
     this.matrix?.dispose();
     this.active?.dispose();
     this.incoming?.dispose();

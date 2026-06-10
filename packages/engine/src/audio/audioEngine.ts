@@ -303,6 +303,14 @@ export class AudioEngine {
     this.composer.start();
   }
 
+  /** Look up a synth by its audioGraph nodeId ('voices' or 'bass'). Used by the
+   *  sequencer scheduler to dispatch note events to the right synth module. */
+  getSynth(nodeId: string): SynthModule | null {
+    if (nodeId === 'bass') return this.bass;
+    if (nodeId === 'voices') return this.pad;
+    return null;
+  }
+
   /** Refresh the audio features for this frame (engine loop, before the matrix). */
   tickFeatures(dt: number): void {
     this.analysers.update(dt);
