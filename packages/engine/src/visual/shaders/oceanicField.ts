@@ -1,10 +1,26 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
+import {
+  bindDescriptorPorts,
+  descriptorUniforms,
+  type VisualModule,
+  type VisualModuleDescriptor,
+} from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+
+export const descriptor: VisualModuleDescriptor = {
+  id: 'oceanicField',
+  label: 'Underlight',
+  techniqueFamily: 'caustic net',
+  params: [
+    { key: 'fog', kind: 'unipolar', min: 0, max: 1, default: 0.25, group: 'field' },
+    { key: 'flow', kind: 'unipolar', min: 0, max: 1, default: 0.45, group: 'field' },
+    { key: 'depth', kind: 'unipolar', min: 0, max: 1, default: 0.15, group: 'field' },
+    { key: 'glint', kind: 'unipolar', min: 0, max: 1, default: 0.5, group: 'scene' },
+    { key: 'sun', kind: 'unipolar', min: 0, max: 1, default: 0.5, group: 'scene' },
+  ],
+};
 
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
@@ -143,51 +159,19 @@ const fragmentShader = /* glsl */ `
 export function createOceanicField(): VisualLayer {
   const pass = new ShaderPass({
     name: 'oceanicField',
-    uniforms: {
-      tDiffuse: { value: null },
-      uTime: { value: 0 },
+    uniforms: descriptorUniforms(descriptor, {
       uResolution: { value: new THREE.Vector2(1, 1) },
-      uFog: { value: 0.25 },
-      uFlow: { value: 0.45 },
-      uDepth: { value: 0.15 },
-      uDark: { value: 0.2 },
-      uGlint: { value: 0.5 },
-      uSun: { value: 0.5 },
-    },
+    }),
     vertexShader,
     fragmentShader,
   });
 
   const uniform = (name: string): THREE.IUniform => pass.uniforms[name]!;
 
-  function bind(
-    registry: SignalRegistry,
-    nodeId: string,
-    port: string,
-    name: string,
-    base: number,
-  ): void {
-    const u = uniform(name);
-    u.value = base;
-    registry.addInput(makePortRef(nodeId, port), {
-      kind: 'unipolar',
-      base,
-      min: 0,
-      max: 1,
-      write: (v) => {
-        u.value = clamp(v, 0, 1);
-      },
-    });
-  }
-
   return {
     pass,
     registerPorts(nodeId, registry, params) {
-      bind(registry, nodeId, 'fog', 'uFog', num(params.fog, 0.25));
-      bind(registry, nodeId, 'flow', 'uFlow', num(params.flow, 0.45));
-      bind(registry, nodeId, 'depth', 'uDepth', num(params.depth, 0.15));
-      bind(registry, nodeId, 'glint', 'uGlint', num(params.glint, 0.5));
-      bind(registry, nodeId, 'sun', 'uSun', num(params.sun, 0.5));
+      bindDescriptorPorts(descriptor, pass, nodeId, registry, params);
     },
     update(timeSec) {
       uniform('uTime').value = timeSec;
@@ -204,6 +188,7 @@ export function createOceanicField(): VisualLayer {
   };
 }
 
-function num(v: Scalar | undefined, fallback: number): number {
-  return typeof v === 'number' ? v : fallback;
-}
+export const oceanicFieldModule: VisualModule = {
+  descriptor,
+  create: createOceanicField,
+};

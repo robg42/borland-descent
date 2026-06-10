@@ -1,10 +1,26 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
+import {
+  bindDescriptorPorts,
+  descriptorUniforms,
+  type VisualModule,
+  type VisualModuleDescriptor,
+} from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+
+export const descriptor: VisualModuleDescriptor = {
+  id: 'thermocline',
+  label: 'Prism Horizon',
+  techniqueFamily: 'refractive split',
+  params: [
+    { key: 'fog', kind: 'unipolar', min: 0, max: 1, default: 0.35, group: 'field' },
+    { key: 'flow', kind: 'unipolar', min: 0, max: 1, default: 0.35, group: 'field' },
+    { key: 'depth', kind: 'unipolar', min: 0, max: 1, default: 0.3, group: 'field' },
+    { key: 'refract', kind: 'unipolar', min: 0, max: 1, default: 0.35, group: 'scene' },
+    { key: 'dispersion', uniform: 'uDisp', kind: 'unipolar', min: 0, max: 1, default: 0.3, group: 'scene' },
+  ],
+};
 
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
@@ -73,7 +89,7 @@ const fragmentShader = /* glsl */ `
     vec3 amber = mix(vec3(0.30, 0.255, 0.175), vec3(0.185, 0.18, 0.16), uDark); // warmth dies
     vec3 ash = mix(vec3(0.12, 0.12, 0.115), vec3(0.085, 0.09, 0.10), uDark);
     vec3 col = mix(ash, amber, glow * (0.55 + 0.45 * strata));
-    col += vec3(0.90, 0.85, 0.74) * sun * 0.32 * (1.0 - uDark); // lobe extinguishes late-arc
+    col += vec3(0.90, 0.85, 0.74) * sun * 0.24 * (1.0 - uDark); // lobe extinguishes late-arc
     return mix(col, vec3(0.22, 0.22, 0.21), uFog * 0.25);       // fog greys the sky
   }
 
@@ -149,45 +165,19 @@ const ARC_WINDOW_OUT = 0.52;
 export function createThermocline(): VisualLayer {
   const pass = new ShaderPass({
     name: 'thermocline',
-    uniforms: {
-      tDiffuse: { value: null },
-      uTime: { value: 0 },
+    uniforms: descriptorUniforms(descriptor, {
       uResolution: { value: new THREE.Vector2(1, 1) },
-      uFog: { value: 0.35 },
-      uFlow: { value: 0.35 },
-      uDepth: { value: 0.3 },
-      uRefract: { value: 0.35 },
-      uDisp: { value: 0.3 },
-      uDark: { value: 0 },
-    },
+    }),
     vertexShader,
     fragmentShader,
   });
 
   const uniform = (name: string): THREE.IUniform => pass.uniforms[name]!;
 
-  function bind(registry: SignalRegistry, nodeId: string, port: string, name: string, base: number): void {
-    const u = uniform(name);
-    u.value = base;
-    registry.addInput(makePortRef(nodeId, port), {
-      kind: 'unipolar',
-      base,
-      min: 0,
-      max: 1,
-      write: (v) => {
-        u.value = clamp(v, 0, 1);
-      },
-    });
-  }
-
   return {
     pass,
     registerPorts(nodeId, registry, params) {
-      bind(registry, nodeId, 'fog', 'uFog', num(params.fog, 0.35));
-      bind(registry, nodeId, 'flow', 'uFlow', num(params.flow, 0.35));
-      bind(registry, nodeId, 'depth', 'uDepth', num(params.depth, 0.3));
-      bind(registry, nodeId, 'refract', 'uRefract', num(params.refract, 0.35));
-      bind(registry, nodeId, 'dispersion', 'uDisp', num(params.dispersion, 0.3));
+      bindDescriptorPorts(descriptor, pass, nodeId, registry, params);
     },
     update(timeSec) {
       uniform('uTime').value = timeSec;
@@ -205,6 +195,7 @@ export function createThermocline(): VisualLayer {
   };
 }
 
-function num(v: Scalar | undefined, fallback: number): number {
-  return typeof v === 'number' ? v : fallback;
-}
+export const thermoclineModule: VisualModule = {
+  descriptor,
+  create: createThermocline,
+};

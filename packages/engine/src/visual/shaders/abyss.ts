@@ -1,10 +1,26 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
+import {
+  bindDescriptorPorts,
+  descriptorUniforms,
+  type VisualModule,
+  type VisualModuleDescriptor,
+} from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+
+export const descriptor: VisualModuleDescriptor = {
+  id: 'abyss',
+  label: 'The Throat',
+  techniqueFamily: 'vortex',
+  params: [
+    { key: 'fog', kind: 'unipolar', min: 0, max: 1, default: 0.25, group: 'field' },
+    { key: 'flow', kind: 'unipolar', min: 0, max: 1, default: 0.4, group: 'field' },
+    { key: 'depth', kind: 'unipolar', min: 0, max: 1, default: 0.5, group: 'field' },
+    { key: 'maw', kind: 'unipolar', min: 0, max: 1, default: 0.15, group: 'scene' },
+    { key: 'glow', kind: 'unipolar', min: 0, max: 1, default: 0.45, group: 'scene' },
+  ],
+};
 
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
@@ -165,45 +181,21 @@ const fragmentShader = /* glsl */ `
 export function createAbyss(): VisualLayer {
   const pass = new ShaderPass({
     name: 'abyss',
-    uniforms: {
-      tDiffuse: { value: null },
-      uTime: { value: 0 },
+    uniforms: descriptorUniforms(descriptor, {
       uResolution: { value: new THREE.Vector2(1, 1) },
-      uFog: { value: 0.25 },
-      uFlow: { value: 0.4 },
-      uDepth: { value: 0.5 },
+      // scene-entry darkness; the host's setArc overrides it immediately
       uDark: { value: 0.8 },
-      uMaw: { value: 0.15 },
-      uGlow: { value: 0.45 },
-    },
+    }),
     vertexShader,
     fragmentShader,
   });
 
   const uniform = (name: string): THREE.IUniform => pass.uniforms[name]!;
 
-  function bind(registry: SignalRegistry, nodeId: string, port: string, name: string, base: number): void {
-    const u = uniform(name);
-    u.value = base;
-    registry.addInput(makePortRef(nodeId, port), {
-      kind: 'unipolar',
-      base,
-      min: 0,
-      max: 1,
-      write: (v) => {
-        u.value = clamp(v, 0, 1);
-      },
-    });
-  }
-
   return {
     pass,
     registerPorts(nodeId, registry, params) {
-      bind(registry, nodeId, 'fog', 'uFog', num(params.fog, 0.25));
-      bind(registry, nodeId, 'flow', 'uFlow', num(params.flow, 0.4));
-      bind(registry, nodeId, 'depth', 'uDepth', num(params.depth, 0.5));
-      bind(registry, nodeId, 'maw', 'uMaw', num(params.maw, 0.15));
-      bind(registry, nodeId, 'glow', 'uGlow', num(params.glow, 0.45));
+      bindDescriptorPorts(descriptor, pass, nodeId, registry, params);
     },
     update(timeSec) {
       uniform('uTime').value = timeSec;
@@ -220,6 +212,7 @@ export function createAbyss(): VisualLayer {
   };
 }
 
-function num(v: Scalar | undefined, fallback: number): number {
-  return typeof v === 'number' ? v : fallback;
-}
+export const abyssModule: VisualModule = {
+  descriptor,
+  create: createAbyss,
+};

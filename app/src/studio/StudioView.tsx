@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { JsonPatchStore, SYNTH_MODULE_IDS, type ModulationRoute, type Patch } from '@borland/engine';
+import {
+  JsonPatchStore,
+  SYNTH_MODULE_IDS,
+  VISUAL_MODULE_IDS,
+  type ModulationRoute,
+  type Patch,
+} from '@borland/engine';
 import { useEngine } from '../engineReact/useEngine';
 import { TransportBar } from './TransportBar';
 import { SceneParams } from './SceneParams';
@@ -199,6 +205,24 @@ export function StudioView() {
     [sceneIndex],
   );
 
+  // Set the active scene's visual module, then rebuild the engine (V1 rebuild:
+  // modules are interchangeable behind the descriptor contract).
+  const setShader = useCallback(
+    (moduleId: string) => {
+      setPatch((prev) => {
+        if (!prev) return prev;
+        const next = structuredClone(prev);
+        const sc = next.scenes[sceneIndex];
+        if (sc) sc.shaderModuleId = moduleId;
+        const layer = next.visualGraph.layers[0];
+        if (layer) layer.moduleId = moduleId;
+        return next;
+      });
+      setReload((r) => r + 1);
+    },
+    [sceneIndex],
+  );
+
   const scenes = patch?.scenes ?? [];
 
   return (
@@ -260,9 +284,26 @@ export function StudioView() {
               ))}
             </select>
           </div>
+          <div className="row">
+            <span className="ctl__name">
+              <b>visual</b>
+            </span>
+            <select
+              className="field"
+              style={{ maxWidth: '14rem' }}
+              value={scenes[sceneIndex]?.shaderModuleId ?? ''}
+              onChange={(e) => setShader(e.target.value)}
+            >
+              {VISUAL_MODULE_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
+          </div>
           <p className="hint">
             Drag, scroll or pinch the preview to move through the arc. Edits apply live;
-            switching scene or voice rebuilds the engine.
+            switching scene, voice or visual rebuilds the engine.
           </p>
         </div>
       </div>

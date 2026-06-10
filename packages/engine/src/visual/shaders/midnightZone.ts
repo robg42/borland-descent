@@ -1,10 +1,26 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
+import {
+  bindDescriptorPorts,
+  descriptorUniforms,
+  type VisualModule,
+  type VisualModuleDescriptor,
+} from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+
+export const descriptor: VisualModuleDescriptor = {
+  id: 'midnightZone',
+  label: 'Noctiluca',
+  techniqueFamily: 'constellation',
+  params: [
+    { key: 'fog', kind: 'unipolar', min: 0, max: 1, default: 0.25, group: 'field' },
+    { key: 'flow', kind: 'unipolar', min: 0, max: 1, default: 0.3, group: 'field' },
+    { key: 'depth', kind: 'unipolar', min: 0, max: 1, default: 0.5, group: 'field' },
+    { key: 'pulse', kind: 'unipolar', min: 0, max: 1, default: 0, group: 'scene' },
+    { key: 'flicker', kind: 'unipolar', min: 0, max: 1, default: 0, group: 'scene' },
+  ],
+};
 
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
@@ -120,7 +136,7 @@ const fragmentShader = /* glsl */ `
       // so the bloomed edge reads #0B4A52-ish — never white-hot electric cyan
       vec3 hot = mix(tint, vec3(0.13, 0.60, 0.68), clamp(k * 0.25, 0.0, 0.6));
       col += hot * k;
-      col += vec3(0.10, 0.52, 0.60) * (br * uFog * halo(d)); // colder than the source
+      col += vec3(0.10, 0.52, 0.60) * (0.6 * br * uFog * halo(d)); // colder than the source
       col += tint * br * (trailGlow(uv, p, m) * 0.9 + trailGlow(uv, m, e) * 0.45);
     }
 
@@ -131,45 +147,19 @@ const fragmentShader = /* glsl */ `
 export function createMidnightZone(): VisualLayer {
   const pass = new ShaderPass({
     name: 'midnightZone',
-    uniforms: {
-      tDiffuse: { value: null },
-      uTime: { value: 0 },
+    uniforms: descriptorUniforms(descriptor, {
       uResolution: { value: new THREE.Vector2(1, 1) },
-      uFog: { value: 0.25 },
-      uFlow: { value: 0.3 },
-      uDepth: { value: 0.5 },
-      uDark: { value: 0.65 },
-      uPulse: { value: 0 },
-      uFlicker: { value: 0 },
-    },
+    }),
     vertexShader,
     fragmentShader,
   });
 
   const uniform = (name: string): THREE.IUniform => pass.uniforms[name]!;
 
-  function bind(registry: SignalRegistry, nodeId: string, port: string, name: string, base: number): void {
-    const u = uniform(name);
-    u.value = base;
-    registry.addInput(makePortRef(nodeId, port), {
-      kind: 'unipolar',
-      base,
-      min: 0,
-      max: 1,
-      write: (v) => {
-        u.value = clamp(v, 0, 1);
-      },
-    });
-  }
-
   return {
     pass,
     registerPorts(nodeId, registry, params) {
-      bind(registry, nodeId, 'fog', 'uFog', num(params.fog, 0.25));
-      bind(registry, nodeId, 'flow', 'uFlow', num(params.flow, 0.3));
-      bind(registry, nodeId, 'depth', 'uDepth', num(params.depth, 0.5));
-      bind(registry, nodeId, 'pulse', 'uPulse', num(params.pulse, 0));
-      bind(registry, nodeId, 'flicker', 'uFlicker', num(params.flicker, 0));
+      bindDescriptorPorts(descriptor, pass, nodeId, registry, params);
     },
     update(timeSec) {
       uniform('uTime').value = timeSec;
@@ -186,6 +176,7 @@ export function createMidnightZone(): VisualLayer {
   };
 }
 
-function num(v: Scalar | undefined, fallback: number): number {
-  return typeof v === 'number' ? v : fallback;
-}
+export const midnightZoneModule: VisualModule = {
+  descriptor,
+  create: createMidnightZone,
+};

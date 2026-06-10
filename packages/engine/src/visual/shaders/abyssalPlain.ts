@@ -1,10 +1,28 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
+import {
+  bindDescriptorPorts,
+  descriptorUniforms,
+  type VisualModule,
+  type VisualModuleDescriptor,
+} from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+
+export const descriptor: VisualModuleDescriptor = {
+  id: 'abyssalPlain',
+  label: "Leviathan's Flank",
+  techniqueFamily: 'silhouette mass',
+  params: [
+    { key: 'fog', kind: 'unipolar', min: 0, max: 1, default: 0.3, group: 'field' },
+    { key: 'flow', kind: 'unipolar', min: 0, max: 1, default: 0.15, group: 'field' },
+    { key: 'depth', kind: 'unipolar', min: 0, max: 1, default: 0.45, group: 'field' },
+    // Scene-specific: the breath amplitude (intended target for bassMeter.level)
+    // and the sonar return brightness (intended target for masterMeter.level).
+    { key: 'pulse', kind: 'unipolar', min: 0, max: 1, default: 0.25, group: 'scene' },
+    { key: 'sonar', kind: 'unipolar', min: 0, max: 1, default: 0.6, group: 'scene' },
+  ],
+};
 
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
@@ -93,10 +111,12 @@ const fragmentShader = /* glsl */ `
 
     // — open water: a flat grey-green band in the upper-left wedge, its light dying
     //   with the arc; the shimmer drift is glacial by construction, even at flow=1.
+    //   Lifted ~1.25x against the mass so the 128px read stays a black wedge with a
+    //   crack of water.
     float shimmer = fbm3(vec2(q.x * 1.4, q.y * 2.0) + uTime * 0.008 * (0.3 + uFlow));
     float above   = clamp(d * 2.2, 0.0, 1.0);
-    vec3 paleW    = vec3(0.135, 0.157, 0.145) * mix(1.0, 0.32, arc);
-    vec3 water    = mix(vec3(0.027, 0.035, 0.031), paleW, pow(above, 0.7) * (0.8 + 0.2 * shimmer));
+    vec3 paleW    = vec3(0.169, 0.196, 0.181) * mix(1.0, 0.32, arc);
+    vec3 water    = mix(vec3(0.034, 0.044, 0.039), paleW, pow(above, 0.7) * (0.8 + 0.2 * shimmer));
 
     // — mass interior: matte near-black; the long folds whisper only near the contour.
     float crease   = ridged2D(q * vec2(2.6, 5.2));
@@ -135,47 +155,17 @@ const fragmentShader = /* glsl */ `
 export function createAbyssalPlain(): VisualLayer {
   const pass = new ShaderPass({
     name: 'abyssalPlain',
-    uniforms: {
-      tDiffuse: { value: null },
-      uTime: { value: 0 },
-      uResolution: { value: new THREE.Vector2(1, 1) },
-      uFog: { value: 0.3 },
-      uFlow: { value: 0.15 },
-      uDepth: { value: 0.45 },
-      uDark: { value: 0.8 },
-      uPulse: { value: 0.25 },
-      uSonar: { value: 0.6 },
-    },
+    uniforms: descriptorUniforms(descriptor, { uResolution: { value: new THREE.Vector2(1, 1) } }),
     vertexShader,
     fragmentShader,
   });
 
   const uniform = (name: string): THREE.IUniform => pass.uniforms[name]!;
 
-  function bind(registry: SignalRegistry, nodeId: string, port: string, name: string, base: number): void {
-    const u = uniform(name);
-    u.value = base;
-    registry.addInput(makePortRef(nodeId, port), {
-      kind: 'unipolar',
-      base,
-      min: 0,
-      max: 1,
-      write: (v) => {
-        u.value = clamp(v, 0, 1);
-      },
-    });
-  }
-
   return {
     pass,
     registerPorts(nodeId, registry, params) {
-      bind(registry, nodeId, 'fog', 'uFog', num(params.fog, 0.3));
-      bind(registry, nodeId, 'flow', 'uFlow', num(params.flow, 0.15));
-      bind(registry, nodeId, 'depth', 'uDepth', num(params.depth, 0.45));
-      // Scene-specific: the breath amplitude (intended target for bassMeter.level)
-      // and the sonar return brightness (intended target for masterMeter.level).
-      bind(registry, nodeId, 'pulse', 'uPulse', num(params.pulse, 0.25));
-      bind(registry, nodeId, 'sonar', 'uSonar', num(params.sonar, 0.6));
+      bindDescriptorPorts(descriptor, pass, nodeId, registry, params);
     },
     update(timeSec) {
       uniform('uTime').value = timeSec;
@@ -195,6 +185,4 @@ export function createAbyssalPlain(): VisualLayer {
   };
 }
 
-function num(v: Scalar | undefined, fallback: number): number {
-  return typeof v === 'number' ? v : fallback;
-}
+export const abyssalPlainModule: VisualModule = { descriptor, create: createAbyssalPlain };

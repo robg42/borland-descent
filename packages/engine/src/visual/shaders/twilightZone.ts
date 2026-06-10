@@ -1,10 +1,26 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
+import {
+  bindDescriptorPorts,
+  descriptorUniforms,
+  type VisualModule,
+  type VisualModuleDescriptor,
+} from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+
+export const descriptor: VisualModuleDescriptor = {
+  id: 'twilightZone',
+  label: 'Last Light',
+  techniqueFamily: 'particulate cone',
+  params: [
+    { key: 'fog', kind: 'unipolar', min: 0, max: 1, default: 0.45, group: 'field' },
+    { key: 'flow', kind: 'unipolar', min: 0, max: 1, default: 0.3, group: 'field' },
+    { key: 'depth', kind: 'unipolar', min: 0, max: 1, default: 0.5, group: 'field' },
+    { key: 'lume', kind: 'unipolar', min: 0, max: 1, default: 0.55, group: 'scene' },
+    { key: 'presence', kind: 'unipolar', min: 0, max: 1, default: 0.35, group: 'scene' },
+  ],
+};
 
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
@@ -132,45 +148,19 @@ const fragmentShader = /* glsl */ `
 export function createTwilightZone(): VisualLayer {
   const pass = new ShaderPass({
     name: 'twilightZone',
-    uniforms: {
-      tDiffuse: { value: null },
-      uTime: { value: 0 },
+    uniforms: descriptorUniforms(descriptor, {
       uResolution: { value: new THREE.Vector2(1, 1) },
-      uFog: { value: 0.45 },
-      uFlow: { value: 0.3 },
-      uDepth: { value: 0.5 },
-      uDark: { value: 0.5 },
-      uLume: { value: 0.55 },
-      uPresence: { value: 0.35 },
-    },
+    }),
     vertexShader,
     fragmentShader,
   });
 
   const uniform = (name: string): THREE.IUniform => pass.uniforms[name]!;
 
-  function bind(registry: SignalRegistry, nodeId: string, port: string, name: string, base: number): void {
-    const u = uniform(name);
-    u.value = base;
-    registry.addInput(makePortRef(nodeId, port), {
-      kind: 'unipolar',
-      base,
-      min: 0,
-      max: 1,
-      write: (v) => {
-        u.value = clamp(v, 0, 1);
-      },
-    });
-  }
-
   return {
     pass,
     registerPorts(nodeId, registry, params) {
-      bind(registry, nodeId, 'fog', 'uFog', num(params.fog, 0.45));
-      bind(registry, nodeId, 'flow', 'uFlow', num(params.flow, 0.3));
-      bind(registry, nodeId, 'depth', 'uDepth', num(params.depth, 0.5));
-      bind(registry, nodeId, 'lume', 'uLume', num(params.lume, 0.55));
-      bind(registry, nodeId, 'presence', 'uPresence', num(params.presence, 0.35));
+      bindDescriptorPorts(descriptor, pass, nodeId, registry, params);
     },
     update(timeSec) {
       uniform('uTime').value = timeSec;
@@ -192,6 +182,7 @@ export function createTwilightZone(): VisualLayer {
   };
 }
 
-function num(v: Scalar | undefined, fallback: number): number {
-  return typeof v === 'number' ? v : fallback;
-}
+export const twilightZoneModule: VisualModule = {
+  descriptor,
+  create: createTwilightZone,
+};

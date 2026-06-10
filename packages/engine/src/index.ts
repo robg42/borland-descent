@@ -58,3 +58,6 @@ export type { ResynthSpec } from './audio/resynthesis';
 
 // Synth-module ids (for the studio's per-scene voice picker)
 export { SYNTH_MODULE_IDS } from './audio/synths';
+
+// Visual-module ids (for the studio's per-scene module picker)
+export { VISUAL_MODULE_IDS } from './visual/shaders';

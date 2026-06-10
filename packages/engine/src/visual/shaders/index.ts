@@ -23,4 +23,7 @@ export function createLayer(moduleId: string): VisualLayer {
   return factory();
 }
 
+/** All registered visual-module ids — for the studio's per-scene module picker. */
+export const VISUAL_MODULE_IDS: readonly string[] = Object.keys(FACTORIES);
+
 export type { VisualLayer, VisualLayerFactory } from './types';
