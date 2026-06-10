@@ -158,6 +158,15 @@ preset-capable. Glitch/feedback as an 11th when the RT pool lands.
 > wait on the scene-graph/RT-pool capability work and the frame-budget check.
 > Next: V4 presets. A double-tap gesture (player) now advances to the next
 > scene via an arc glide; pinch/drag/wheel cancels it.
+> V3.1 ✅ — the artist series, N = 20: ten further technique families, each
+> translated (not copied) from a named generative artist and shipped on the
+> descriptor contract as a single fragment pass: molnar (Ordres — Vera Molnár),
+> hobbs (Fidenza — Tyler Hobbs), naon (Plenitude — Manolo Gamboa Naon), akten
+> (Meditation — Memo Akten), crespo (Neural Zoo — Sofia Crespo), anadol
+> (Archive — Refik Anadol), henke (Lumière — Robert Henke), lemercier (Fuji —
+> Joanie Lemercier), rickards (Moiré — Paul Rickards), asendorf (Sort — Kim
+> Asendorf). All carry the fog/flow/depth field trio plus two routable scene
+> ports (one trigger-shaped), and all answer the arc's darkness.
 
 - **V1 — Host + contract (the structural phase).** Single shared renderer +
   composer + RT pool; crossfade as blend pass (closes REVIEW H3);
