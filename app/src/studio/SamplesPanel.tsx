@@ -6,6 +6,7 @@ import {
   type SampleMeta,
   type ResynthSpec,
 } from '@borland/engine';
+import { loadStaticLibrary } from './staticSamples';
 
 interface Props {
   /** Make the chosen sample the current scene's voice (rebuilds the engine). */
@@ -27,6 +28,7 @@ export function SamplesPanel({ onAssign, activeSceneName }: Props) {
   const [samples, setSamples] = useState<SampleMeta[]>([]);
   const [rootMidi, setRootMidi] = useState(60);
   const [busy, setBusy] = useState(false);
+  const [libStatus, setLibStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resynthKind, setResynthKind] = useState<ResynthKind>('paulstretch');
   const [stretch, setStretch] = useState(8);
@@ -47,6 +49,28 @@ export function SamplesPanel({ onAssign, activeSceneName }: Props) {
 
   const refresh = useCallback(() => setSamples(sampleStore.list()), []);
   const locked = busy || rendering !== null;
+
+  const loadLibrary = useCallback(async () => {
+    setError(null);
+    setLibStatus('loading…');
+    setBusy(true);
+    try {
+      const r = await loadStaticLibrary();
+      refresh();
+      const parts: string[] = [];
+      if (r.loaded > 0) parts.push(`${r.loaded} loaded`);
+      if (r.skipped > 0) parts.push(`${r.skipped} already present`);
+      if (r.failed.length > 0) {
+        setError(`Failed: ${r.failed.join('; ')}`);
+      }
+      setLibStatus(parts.length ? parts.join(', ') : 'nothing new in library');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load library.');
+      setLibStatus(null);
+    } finally {
+      setBusy(false);
+    }
+  }, [refresh]);
 
   const onFiles = useCallback(
     async (files: FileList) => {
@@ -102,6 +126,13 @@ export function SamplesPanel({ onAssign, activeSceneName }: Props) {
 
   return (
     <div>
+      <div className="row" style={{ marginBottom: '0.4rem' }}>
+        <button className="btn" disabled={locked} onClick={() => void loadLibrary()}>
+          load library
+        </button>
+        {libStatus && <span className="hint">{libStatus}</span>}
+      </div>
+
       <div className="row">
         <button className="btn" disabled={locked} onClick={() => fileRef.current?.click()}>
           {busy ? 'loading…' : 'load sample'}
@@ -173,7 +204,7 @@ export function SamplesPanel({ onAssign, activeSceneName }: Props) {
       {samples.length === 0 ? (
         <p className="hint" style={{ marginTop: '0.6rem' }}>
           Load your own audio (WAV / MP3 / OGG) to play it, resynthesise it, or assign it as the
-          current scene’s voice. Set <b>root midi</b> to the pitch the recording sounds at (60 =
+          current scene's voice. Set <b>root midi</b> to the pitch the recording sounds at (60 =
           middle C).
         </p>
       ) : (
@@ -225,10 +256,11 @@ export function SamplesPanel({ onAssign, activeSceneName }: Props) {
       )}
 
       <p className="hint" style={{ marginTop: '0.6rem' }}>
-        ⟳ resynthesises into a <em>new</em> derived sample: <b>paulstretch</b> smears it into a
-        frozen drone, <b>granular</b> re-textures it — “×” sets the time-stretch. “Use” makes a
-        sample {activeSceneName ? `the ${activeSceneName} scene’s` : 'the current scene’s'} voice,
-        whose level, filter and envelope then appear in Scene Parameters and the Matrix.
+        <b>Load library</b> fetches samples from <code>app/public/samples/</code> (add files there
+        and list them in <code>manifest.json</code>). <b>Load sample</b> picks your own file.
+        ⟳ resynthesises into a <em>new</em> derived sample: <b>paulstretch</b> smears to a drone,
+        <b>granular</b> re-textures — "×" sets the stretch. "Use" sets
+        {activeSceneName ? ` the ${activeSceneName} scene's` : " the current scene's"} voice.
       </p>
     </div>
   );
