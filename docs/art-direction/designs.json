@@ -1,0 +1,786 @@
+{
+  "designs": [
+    {
+      "sceneId": "surface",
+      "title": "Underlight — the Skin of the World",
+      "identity": "A glittering white-gold caustic net stretched over luminous turquoise, gathered round a wobbling sun-disc burning through the surface at top-centre — the view from a metre under, looking up.",
+      "concept": "You are floating on your back just beneath the surface, looking up at the underside of the sky. The water's skin is a living Voronoi web of refracted sunlight — the F2−F1 ridge network — coarsest at the zenith where the surface is closest, tightening towards the frame edges as the plane recedes. The sun is a soft refracted disc just above the top edge, wrapped in a bright Snell window; everything below it falls away through Beer–Lambert absorption into deep turquoise. It is the only high-key frame in the whole descent: white-gold over aqua, innocent and lit, matching the Juno bloom of driftPad. Every other scene begins by losing this light.",
+      "palette": {
+        "hexes": [
+          "#0B5E6E",
+          "#29C4CF",
+          "#8CF0E8",
+          "#FFE8A8",
+          "#FFFAED"
+        ],
+        "description": "Owned hue family: luminous turquoise/aqua with WHITE-GOLD highlights — the only warm-gold and only high-key palette in the piece. #0B5E6E deep turquoise (frame floor / hand-off anchor), #29C4CF dominant water aqua, #8CF0E8 pale aqua inside the Snell window and in fog milk, #FFE8A8 caustic gold (the net), #FFFAED near-white sun core. Mid-water body sits ~0.45–0.55 luminance; only caustic ridges and the sun core reach 0.9+ so bloom touches nothing else."
+      },
+      "structure": "Radial, anchored top-centre: sun-disc + Snell window at the zenith; the caustic net is largest directly under the sun and compresses outward via a perspective term (cell scale × 1 + 1.35·smoothstep(r)), giving a domed looking-up geometry rather than flat wallpaper; the water column darkens Beer–Lambert from pale aqua at the top to deep turquoise across the bottom third — that dark floor is the compositional hand-off to the scene below.",
+      "motion": "SHIMMER — fast, fine scintillation: each Voronoi feature point orbits inside its cell (sin(clk + 2π·hash), clk ≈ 0.5–2.1 rad/s via flow) so the net's filaments continuously snap and re-knit, the most kinetic micro-detail in the piece — carried on a slow breathing swell (two incommensurate sines at 0.17/0.11 rad/s scaling the whole domain ±5%) and two counter-drifting layer offsets. Macro-slow, micro-fast.",
+      "technique": "Two-layer animated cellular (Voronoi) noise, 9-tap 3×3 neighbourhood each, F2−F1 ridge extraction (pow-sharpened inverted smoothstep) — NO fbm base. Layers counter-drift at scales ~3.6 and ~6.8; the product term A·B makes net crossings flare hottest, so loudness reads as sparkle. Procedural sun: gaussian core + exponential glare + Snell-window smoothstep on a refraction-wobbled radial distance. Beer–Lambert exp() absorption for the water column. Everything analytic, zero texture fetches, constant loop bounds.",
+      "glslSketch": "// per-cell random 2-vector (same sin-hash family as the host passes)\nvec2 hash2(vec2 p){\n  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));\n  return fract(sin(p) * 43758.5453);\n}\n\n// 9-tap animated Voronoi -> (F1, F2). Feature points ORBIT their cell: the shimmer.\nvec2 voronoiF(vec2 p, float clk){\n  vec2 i = floor(p), f = fract(p);\n  float F1 = 8.0, F2 = 8.0;\n  for (int y = -1; y <= 1; y++)\n  for (int x = -1; x <= 1; x++){\n    vec2 g = vec2(float(x), float(y));\n    vec2 h = hash2(i + g);\n    vec2 o = g - f + 0.5 + 0.42 * sin(clk + 6.2831 * h); // phase-offset orbit: formed at t=0\n    float d = dot(o, o);                                  // squared dist (cheap)\n    if (d < F1) { F2 = F1; F1 = d; } else { F2 = min(F2, d); }\n  }\n  return sqrt(vec2(F1, F2));\n}\n\n// caustic filament: bright where two cells meet (F2-F1 -> 0)\nfloat net(vec2 p, float clk, float width, float sharp){\n  vec2 F = voronoiF(p, clk);\n  return pow(1.0 - smoothstep(0.0, width, F.y - F.x), sharp);\n}\n\nvoid main(){\n  float aspect = uResolution.x / max(uResolution.y, 1.0);\n  vec2 P = vec2(vUv.x * aspect, vUv.y);\n\n  // sun just above the top edge; azimuth from the sun port (gesture.touchX)\n  vec2 sunPos = vec2(mix(0.18, 0.82, uSun) * aspect, 1.08 - 0.18 * uDark);\n  vec2 dS = P - sunPos;\n  dS += 0.035 * sin(P.yx * vec2(3.1, 2.7) + uTime * vec2(0.7, -0.55)); // refraction wobble\n  float r = length(dS);\n\n  // looking-up perspective: net coarsest at the zenith, finer towards the rim\n  float persp = 1.0 + 1.35 * smoothstep(0.0, 1.5, r);\n  float swell = 1.0 + 0.05 * sin(uTime * 0.17) + 0.03 * sin(uTime * 0.11 + 1.7); // breath\n  vec2 p = P * persp * swell;\n\n  float clk   = uTime * (0.5 + 1.6 * uFlow);                       // scintillation clock\n  vec2  drift = uTime * (0.10 + 0.35 * uFlow) * vec2(0.31, 0.13);\n  float A = net(p * (3.6 + 1.2 * uDepth + uDark) + drift, clk,        0.50, 2.2); // coarse\n  float B = net(p * 6.8 - drift * 1.7 + 4.1,              clk * 1.31, 0.38, 3.0); // fine, counter\n  float caustic = 0.6 * A + 0.5 * B + 1.5 * A * B;                 // crossings flare hottest\n\n  // water column: Beer-Lambert toward the frame floor (deepens with depth + arc)\n  float column = (1.0 - vUv.y) * 1.3 + 0.9 * uDepth + 0.9 * uDark;\n  float absorb = exp(-column * 1.05);\n  vec3 AQUA = vec3(0.16, 0.77, 0.81), DEEP = vec3(0.043, 0.37, 0.43);\n  vec3 NIGHT = vec3(0.012, 0.10, 0.14);                            // hand-off hue downward\n  vec3 water = mix(AQUA, DEEP, smoothstep(0.0, 1.7, column));\n\n  float snell = smoothstep(1.25, 0.45, r);   // the bright circular window\n  float glare = exp(-r * 1.9);               // broad radial god-glow\n  float disc  = exp(-r * r * 26.0);          // hot core\n  vec3 GOLD = vec3(1.0, 0.91, 0.66), CORE = vec3(1.0, 0.98, 0.93);\n\n  vec3 col = water * (0.45 + 0.5 * snell + 0.35 * glare);\n  float gain = (0.5 + 1.2 * uGlint) * absorb * mix(0.65, 1.0, snell);\n  col += mix(GOLD, CORE, B) * min(caustic, 2.2) * gain * 0.85;     // the net (only this blooms)\n  col += CORE * (1.5 * disc + 0.45 * glare) * (1.0 - 0.75 * uDark);\n  col = mix(col, vec3(0.78, 0.95, 0.93), uFog * (0.18 + 0.4 * glare)); // milk gathers in the light\n  col = mix(col, NIGHT, 0.6 * uDark);                              // the surface recedes overhead\n  gl_FragColor = vec4(col, 1.0);\n}",
+      "ports": [
+        {
+          "name": "fog",
+          "meaning": "underwater haze/scattering — lifts the frame towards milky pale-aqua, gathering strongest around the sun glare (light shafts dissolving into milk), softening net contrast",
+          "base": 0.25
+        },
+        {
+          "name": "flow",
+          "meaning": "kinetic energy — scintillation clock rate (0.5→2.1 rad/s) and the counter-drift speed of both net layers; at 0 the net still breathes on the swell",
+          "base": 0.45
+        },
+        {
+          "name": "depth",
+          "meaning": "how far below the skin the camera floats — raises the absorption column (turquoise deepens, ridges dim from the bottom up) and tightens the coarse net scale, as if the surface is further overhead",
+          "base": 0.15
+        },
+        {
+          "name": "glint",
+          "meaning": "caustic ridge gain — the audio-reactive sparkle: 0 ≈ faint lattice, 1 ≈ ridges and crossings peak near 0.9–1.0 luminance and bloom; the masterMeter target",
+          "base": 0.5
+        },
+        {
+          "name": "sun",
+          "meaning": "sun-disc azimuth, 0 = left of top edge, 1 = right; the perspective term re-centres the coarsest cells beneath it; the gesture.touchX target",
+          "base": 0.5
+        }
+      ],
+      "audioHooks": [
+        {
+          "source": "masterMeter.level",
+          "target": "field.glint",
+          "behaviour": "control-rate, smoothed (~80ms rise / ~400ms fall): quiet pads hold glint ≈ 0.35, each Juno swell pushes towards 0.9. Because the A·B crossing term flares hardest, loudness reads as sparkle DENSITY on the net — glitter, not a whole-frame brightness pump — and only the flaring ridges cross the bloom threshold."
+        },
+        {
+          "source": "gesture.touchX",
+          "target": "field.sun",
+          "behaviour": "control-rate, slewed ~1.5s: a thumb-drag steers the sun's azimuth along the top edge; the Snell window, glare and the net's coarse zenith follow it, so the listener can drag the light across the sky without it ever snapping."
+        },
+        {
+          "source": "bassMeter.level",
+          "target": "field.flow",
+          "behaviour": "subtle additive offset (+0 to +0.15 over the base 0.45): the sub-bass anchor leans on the swell and drift, so low-end weight reads as the whole skin heaving slightly faster — felt, never strobing."
+        }
+      ],
+      "postSettings": {
+        "bloomStrength": 0.95,
+        "bloomRadius": 0.55,
+        "bloomThreshold": 0.72,
+        "grainIntensity": 0.06
+      },
+      "arcResponse": "Within Surface's range the darkness macro runs 0.18 → 0.27, and the crossfade into scene two carries it towards 0.42 — setArc is designed as 'the surface receding overhead', not a dim. Four coupled moves: (1) sunPos.y drops (1.08 − 0.18·dark) and the core/glare gain fades (×(1 − 0.75·dark)) — the sun sinks towards the rim and pales; (2) dark adds to the absorption column, so ridges die from the frame floor upward and the turquoise deepens; (3) dark enlarges the coarse net frequency (3.6 + dark) — the web gets finer, further away; (4) the whole frame lerps 0.6·dark towards NIGHT (#031A24-ish deep teal), the hand-off hue. At in-scene values the effect is a late-afternoon softening; by mid-crossfade the gold has drained and only the upper net survives.",
+      "stillFrame": "Composed at t=0 by construction: the orbit term sin(0 + 2π·hash) places every feature point at a varied, non-degenerate phase, so the net is fully knitted with zero motion. The still: near-white sun core top-centre (base sun = 0.5) inside a gold-rimmed glare and a bright pale-aqua Snell window; a complete white-gold caustic web, large-celled under the sun, tightening to fine filigree at the frame edges; the lower third already deep turquoise with the net dissolving into it. Reads instantly as 'underside of the ocean surface' as a photograph — the 128px thumbnail is a bright radial burst over turquoise lace, unlike any of the six dark scenes.",
+      "gpuCost": {
+        "estimate": "moderate — per pixel: 2 × 9-tap Voronoi (18 cell evaluations; each ≈ 2 sin for hash2 + 2 sin for the orbit ≈ 72 transcendental lanes) + ~6 exp/pow/smoothstep for sun, absorption and ridges. Roughly 1.1–1.3× the current shader (domain-warped 5-octave fbm ≈ 15 noise evals ≈ 60 sin) — comfortably inside the ≤2× budget.",
+        "notes": "Constant loop bounds (3×3 nested, unrollable), squared-distance compare inside the loop with one sqrt per layer at the end, no texture fetches, no derivatives required. Fallback if a low-end device dips: drop layer B to a 2×2 4-tap variant (visually minor at its fine scale) or share one drift clock. The branch in the F1/F2 update is fine on mobile GPUs (both sides cheap); can be written branchless if profiling says so."
+      },
+      "crossfadeNotes": "Surface has one neighbour — the zone below, which is dark. The linear opacity blend works in our favour diegetically: Surface's bottom third already sits near the neighbour's value range (#0B5E6E → deep teal/night), so the two frames share a dark anchor at the frame floor and the mid-fade never loses its footing. What dissolves last is the high-key top — the sun glare and the caustic ridges — which reads exactly as sinking away from the light. At 50% opacity the ridges drop to ~0.5 luminance and stop blooming (threshold 0.72 → and the neighbour's own post takes over), so there is no half-bloomed halo mush. The one watch-out: if scene two's dominant hue is warm rather than cool, the mid-fade would grey — keep the immediate neighbour in the cool family. Per-scene post overrides should themselves be lerped (or switched at the 50% point) during the fade so bloomThreshold doesn't jump.",
+      "risks": "(1) Ridge aliasing: the fine layer B at scale 6.8 with sharp pow(·,3.0) can shimmer harshly at DPR 2 — the smoothstep widths (0.50/0.38) are the tuning knobs; widen B's slightly on small viewports rather than reaching for fwidth. (2) Bloom discipline: caustic sum exceeds 1.0 at crossings by design (clamped 2.2 pre-output) — if the global bloomThreshold stays at 0.85 instead of the requested 0.72 the scene loses its glitter, and if another scene lowers it without per-scene overrides this scene will halo everywhere; the look depends on the per-scene post override feature landing. (3) OutputPass tone-mapping may dull the white-gold core — check the gold survives ACES; nudge CORE/GOLD up if it greys. (4) The host grain pass scales noise by luminance, so a high-key scene gets disproportionate grain — hence grainIntensity 0.06, do not raise it. (5) uSun must be slewed in the route (≈1.5s) — an unslewed touchX makes the entire perspective field jump."
+    },
+    {
+      "sceneId": "sunlitShallows",
+      "title": "Cathedral of Light",
+      "identity": "A fan of pale green-gold god-rays cuts down from an off-frame sun above top-centre, dust-motes glittering upward inside the bright shafts over deepening teal.",
+      "concept": "You have left the glittering ceiling of the surface and entered the nave. The water column is architecture now: parallel-feeling shafts of late-morning light, warm green-gold like sun through old glass, converge towards a sun you can no longer see. Between the shafts the water is already dim — the gaps belong to the deep, the beams belong to the sky. The only living things are motes: tiny suspended particles rising slowly through the light, and every glass-bell strike from the music makes a constellation of them flare at once, as if the sound itself were catching the light. It is reverent, warm and slightly elegiac — the last place in the descent where sunlight is still an event.",
+      "palette": {
+        "hexes": [
+          "#073036",
+          "#2E6B5E",
+          "#9FBF8A",
+          "#D6C98F",
+          "#EDE6C4"
+        ],
+        "description": "Owned hue family: GREEN-GOLD (warm chartreuse light over teal water). #073036 deepening-teal background floor (shared dark anchor with neighbours so crossfade blacks align); #2E6B5E sea-green mid-water in the gaps; #9FBF8A green-gold beam body; #D6C98F sand-gold beam core near the sun; #EDE6C4 pale-gold mote glints (the only near-white, reserved for sparkle peaks so bloom finds them). Warmer and softer than the surface scene's aqua/white; no blues purer than the teal floor — gold is this scene's and nobody else's."
+      },
+      "structure": "Radial fan anchored at a sun ~0.25 frame-heights above top-centre: every pixel's angle to that anchor drives an angular comb, so the frame is organised into alternating bright-shaft / dim-gap wedges — near-vertical at centre, increasingly diagonal towards the edges. Three superposed combs (7, 14, 23 shafts) break the symmetry into a believable irregular fan. A vertical counter-current of rising motes crosses the downward light; the bottom third is where beams die into teal, giving the frame a luminous top / heavy floor hierarchy that reads in a 128px thumbnail as 'light from above'.",
+      "motion": "RISE — motes drift steadily upward (the only upward motion in the seven scenes) at a calm, breathing pace, while the three beam combs counter-sweep at glacial speed (full character change over ~60s). Two timing layers: glacial sweep + instant bell-triggered sparkle attacks, mirroring glassBells' percussive attacks over a slow wash.",
+      "technique": "Polar shaft fan: one atan() from an off-frame sun anchor → three sin^k angular combs counter-rotating at different speeds, multiplied by exp() radial decay and a 1-D angular value-noise shimmer (light wobbling through a moving surface). Motes: gridded single-cell hash sparkles, two parallax layers scrolling upward, each mote twinkle-phased by its hash and gated by smoothstep so only a fraction glint at once; mote brightness is multiplied by the local beam mask so the dust visibly lives IN the light. Background is a 2-stop teal gradient + ONE value-noise octave. Key tricks: the atan seam points straight up from the sun, which is off-frame, so it never shows; jitter clamped to [0.18, 0.82] of the cell so each mote needs only its own cell (no 3x3 neighbourhood); no fbm stacks, no texture fetches.",
+      "glslSketch": "// ports: uFog uFlow uDepth uShafts uGlint uDark (all unipolar), plus uTime/uResolution\n// hash(vec2)->float and noise(vec2) value-noise as in the existing shaders\nconst float TAU = 6.2831853;\n\n// one angular comb of soft shafts fanning from the sun anchor\nfloat beamSet(float ang, float freq, float phase, float sharp){\n  float s = 0.5 + 0.5 * sin(ang * freq + phase);\n  return pow(s, sharp);                      // sharp: edge hardness of the shafts\n}\n\n// one mote layer: single-cell hash sparkle, twinkle-phased by hash, gated\nfloat motes(vec2 wp, float scale, float t, float gate){\n  vec2 g = wp * scale; vec2 id = floor(g); vec2 f = fract(g);\n  float h = hash(id);\n  vec2 jit = vec2(0.18) + 0.64 * vec2(h, hash(id + 7.3)); // mote stays in its cell\n  float d = length(f - jit);\n  float tw = 0.5 + 0.5 * sin(t * (0.6 + h) * 2.0 + h * TAU); // h*TAU: lit at t=0 too\n  return smoothstep(gate, 1.0, tw) * exp(-d * d * 90.0);     // tight gaussian glint\n}\n\nvoid main(){\n  vec2 uv = vUv;\n  float aspect = uResolution.x / max(uResolution.y, 1.0);\n  vec2 p = vec2((uv.x - 0.5) * aspect, uv.y);\n  float t = uTime * (0.3 + uFlow * 0.7);\n\n  // sun anchored above the frame; depth pushes it further away\n  vec2 sun = vec2(0.0, 1.25 + uDepth * 0.5);\n  vec2 d = p - sun;  float r = length(d);\n  float ang = atan(d.x, -d.y);               // 0 = straight down; seam is off-frame\n\n  // cathedral fan: three counter-sweeping combs; bass (uShafts) widens + brightens\n  float sharp = mix(9.0, 3.0, uShafts);\n  float fan = beamSet(ang, 14.0,  t * 0.05,       sharp)       * 0.55\n            + beamSet(ang, 23.0, -t * 0.04 + 1.7, sharp * 1.6) * 0.30\n            + beamSet(ang,  7.0,  t * 0.02 + 4.0, sharp * 0.7) * 0.45;\n  fan *= 0.65 + 0.55 * noise(vec2(ang * 9.0, t * 0.35));       // per-shaft shimmer\n  float decay = mix(1.1, 2.4, uDark);                          // light dies sooner, deeper\n  float beam = fan * exp(-max(r - 0.25, 0.0) * decay) * (0.55 + 0.45 * uShafts);\n\n  // water body: dim teal gradient + one cheap noise octave\n  float body = noise(p * 3.0 + vec2(0.0, -t * 0.1));\n  float gapLight = mix(0.50, 0.14, uDark);                     // gaps die first\n  vec3 col = mix(vec3(0.027, 0.188, 0.212),                    // #073036 floor\n                 vec3(0.180, 0.420, 0.368),                    // #2E6B5E mid-sea\n                 uv.y * gapLight * (0.7 + 0.3 * body));\n\n  // beams paint green-gold light into the column; gold cools as the arc deepens\n  vec3 beamCol = mix(vec3(0.84, 0.79, 0.56), vec3(0.62, 0.75, 0.54), uDark * 0.7);\n  col += beam * beamCol * 0.9;                                 // core luma ~0.8 → blooms\n\n  // rising motes, two parallax layers; bells (uGlint) open the twinkle gate\n  float rise = t * 0.06;\n  float gate = 0.62 + 0.25 * uDark - 0.35 * uGlint;\n  float m = motes(p + vec2(0.0, -rise),       14.0, t,       gate)\n          + motes(p + vec2(3.7, -rise * 1.8), 26.0, t * 1.3, gate + 0.08);\n  m *= 0.35 + 0.65 * smoothstep(0.05, 0.5, beam);              // motes live IN the light\n  col += m * (0.6 + 1.8 * uGlint) * vec3(0.93, 0.90, 0.77);    // #EDE6C4 flare\n\n  // fog: milky scatter fills the gaps, softens the architecture\n  col = mix(col, vec3(0.45, 0.55, 0.42) * (0.35 + 0.5 * beam), uFog * 0.22);\n\n  col *= mix(1.0, 0.30, uDark * uDark);      // eased settle — mid-arc keeps its light\n  col *= mix(0.7, 1.0, smoothstep(1.35, 0.3, length(uv - 0.5)));\n  gl_FragColor = vec4(col, 1.0);\n}",
+      "ports": [
+        {
+          "name": "fog",
+          "meaning": "Milky green scatter filling the gaps between shafts and softening beam edges — volumetric haze, not a brightness lift.",
+          "base": 0.45
+        },
+        {
+          "name": "flow",
+          "meaning": "Tempo of the world: beam-comb sweep speed, shaft shimmer rate and mote rise speed all scale together.",
+          "base": 0.4
+        },
+        {
+          "name": "depth",
+          "meaning": "How far below the surface within the shallows: pushes the sun anchor further away, lengthening and softening the rays.",
+          "base": 0.15
+        },
+        {
+          "name": "shafts",
+          "meaning": "Beam breadth/intensity swell — widens the shaft duty cycle (sharp 9→3) and lifts beam gain ~45%; the bass target.",
+          "base": 0.3
+        },
+        {
+          "name": "glint",
+          "meaning": "Mote sparkle excitation — lowers the twinkle gate (more motes lit at once) and multiplies flare gain up to 4x; the bell target.",
+          "base": 0.15
+        }
+      ],
+      "audioHooks": [
+        {
+          "source": "bassMeter.level",
+          "target": "field.shafts",
+          "behaviour": "Slow swell (~250ms smoothing): on each sub-bass anchor the whole fan breathes wider and brighter — the cathedral inhales with the low end, then narrows back as it decays."
+        },
+        {
+          "source": "fft.high",
+          "target": "field.glint",
+          "behaviour": "Fast attack / slow (~1s) release: every glass-bell strike drops the twinkle gate and boosts flare gain, so a constellation of motes flashes pale gold inside the shafts and shimmers out — the bells literally sparkle."
+        },
+        {
+          "source": "masterMeter.level",
+          "target": "field.fog",
+          "behaviour": "Gentle, heavily smoothed, small range (≤0.2 of port): when the convolution wash thickens, the water turns milkier between the beams; near-silence leaves the gaps clear and dark."
+        },
+        {
+          "source": "arc.darkness",
+          "target": "field.depth",
+          "behaviour": "Slow ramp across the scene's arc span: the sun anchor recedes from 1.25 to ~1.75 frame-heights, stretching the rays longer and thinner as the descent carries you away from the surface."
+        }
+      ],
+      "postSettings": {
+        "bloomStrength": 1.15,
+        "bloomRadius": 0.55,
+        "bloomThreshold": 0.55,
+        "grainIntensity": 0.07
+      },
+      "arcResponse": "setArc(darkness) restructures the light rather than dimming the frame: ray decay lengthens (1.1→2.4) so beams penetrate less deep and the bottom third drowns first; gap light collapses fastest (gapLight 0.5→0.14) so contrast RISES before brightness falls — entering the scene it is a warm gauzy nave, leaving it only the shafts survive against deep teal; the beam colour cools from sand-gold towards pale green (warmth is the first casualty of depth); the mote twinkle gate climbs so fewer particles catch light; the final settle is eased (uDark²) so mid-arc keeps its glow and the darkening accelerates only near the handoff to thermocline. Net read: the cathedral closes its clerestory windows one by one.",
+      "stillFrame": "At t=0 the comb phases (0, 1.7, 4.0) are tuned to compose: one broad bright shaft falls just right of centre and reaches the bottom third, two narrower rays interleave on the left, and the top edge glows sand-gold where all wedges converge towards the unseen sun. Because each mote's twinkle phase comes from its hash (h·TAU term), a deterministic ~15% of motes are frozen at peak glint — a scatter of pale-gold points hangs inside the bright shafts, mid-rise. Gaps sit at deep teal, vignette grounds the corners. It reads as a held breath in a flooded cathedral, not a paused animation.",
+      "gpuCost": {
+        "estimate": "cheap — per pixel: 2 value-noise calls (8 hashes), 2 single-cell mote lookups (~5 hashes), 1 atan, 4 sin, 3 pow, 3 exp, 2 smoothstep; roughly HALF the cost of the current sunlitShallows shader (3 fbm calls = 15 noise = 60 hashes).",
+        "notes": "Well inside the ~4ms layer budget at DPR2/390px with headroom to spare; the budget saved versus the old caustic shader could fund a third mote layer if the look wants more dust, but two layers already read. No loops at all in the new shader, so no constant-bound concerns."
+      },
+      "crossfadeNotes": "Luminance here is bimodal (bright shafts / dim gaps), which survives a linear opacity blend far better than two flat washes — the mid-fade never averages to uniform grey. Fading IN from oceanicField (surface caustics above): both scenes are top-lit with teal floors, so at 50% the surface's caustic glitter appears to break into shafts plunging beneath it — a natural 'sinking below the ceiling' read; the shared #073036-family dark anchor keeps blacks aligned. Fading OUT to thermocline below: by the boundary setArc has already collapsed the gaps to near-floor, so during the blend thermocline's structure emerges in the dark wedges while the last gold rays thin and die — light visibly failing, which is the story. One care: hold mote glint gain modest during fades (the routes carry over) so isolated bright points don't float incongruously over the neighbour's image at low opacity.",
+      "risks": "(1) Aliasing on the narrowest shafts: sin^14 comb at freq 23 can shimmer at DPR1 — cap sharp at ~14 and keep max freq ≤ 23; if it crawls, widen via fwidth-free trick: reduce sharp with r so distant (lower-frame) shaft edges soften naturally. (2) atan seam: points straight up from the sun, which is off-frame by design — but if depth modulation ever pulled the sun INTO frame the seam would show; clamp sun.y ≥ 1.15. (3) Banding in the dim teal gradient on OLED phones — the 0.07 grain pass dithers it; do not ship grain below ~0.04. (4) Glint flutter: fft.high is spiky; without fast-attack/slow-release shaping in the route the twinkle gate strobes — specify the release in the route config, not the shader. (5) Bloom coupling: beam-core luma (~0.8) must stay above the 0.55 threshold or the cathedral loses its halation; if a global route dims the layer, bloom dies first — acceptable, but verify against the master fade on scene swaps."
+    },
+    {
+      "sceneId": "thermocline",
+      "title": "Prism Horizon",
+      "identity": "A razor-thin prismatic blade of light cuts the frame dead horizontal — dying amber-grey haze above it, cold steel-indigo isotherm lines below it, visibly bent and RGB-fringed as if seen through wobbling glass.",
+      "concept": "This is the hinge of the descent, so the frame itself is hinged: the only hard line in the entire piece, an optical interface between the last of the sun's warmth and the first true cold. Above the line, almost nothing — a flat, faded amber-grey haze with one dim sun-memory lobe, deliberately restrained. Below the line, everything — thin pale striation lines (isotherms, compressed tight against the seam) viewed through a schlieren lens that displaces and chromatically tears them into red/blue fringes, exactly the way a temperature gradient bends light. The two halves shear past each other in opposite directions like immiscible fluids, and the seam itself is a literal prism: a 1–2px core split into offset R/G/B lines that flares when the refractPad swells. The image does not decorate the music; the pad physically bends it.",
+      "palette": {
+        "hexes": [
+          "#0A0E1E",
+          "#35466B",
+          "#A18B66",
+          "#E6D9BD",
+          "#8FD4E0"
+        ],
+        "description": "Split duotone — the only warm/cold split-palette scene. #0A0E1E deep steel-indigo (background below the line, owns the bottom of the frame); #35466B steel-indigo mid (striation field — this scene OWNS steel-indigo); #A18B66 faded amber-grey (the dying warmth above — chroma deliberately low so it greys rather than glows, and crossfades clean); #E6D9BD pale parchment (sun-memory lobe and the warm phase of the blade); #8FD4E0 icy prism cyan (chromatic fringe accent at the seam — used in slivers only). No teal, no green, no saturated blue: the scene's hue identity is the amber/steel COLLISION, not either colour alone."
+      },
+      "structure": "ONE hard horizontal division — the only hard line in the seven scenes. The line sits near 0.45 frame-height at scene entry and rises towards 0.74 as the arc darkens, so the composition is an asymmetric two-band split with a single high-energy seam. Above: near-empty graded field with one off-centre soft lobe at (0.38, 0.85) for rule-of-thirds weight. Below: horizontal striation lines whose spacing compresses towards the seam (sqrt-warped depth coordinate), creating a density gradient that points every eye-track at the blade. Mirror tension across the line: a squashed warm reflection smear hangs just beneath it (fake total internal reflection), so the boundary reads as a real optical surface, not a gradient stop.",
+      "motion": "SHEAR — the two halves drift horizontally in opposite directions, glacially (≈0.01 uv/s at base flow), while the seam carries a slow meniscus wobble (two incommensurate sines + low-freq noise) and the lens displacement below breathes with the pad. Timing character: tidal, sub-perceptual until you fix on a striation line and watch it crawl against the haze above.",
+      "technique": "Schlieren refraction, single fragment pass, fully procedural. Key tricks: (1) hard branch on uv.y vs lineY(x) — screen-coherent divergence, so the branch is nearly free and each half pays only its own cost; (2) the cold half evaluates one shared 3-octave fbm grain ONCE, then re-evaluates only the cheap sin-based band function three times with offset coordinates → chromatic dispersion for ~zero extra noise cost; (3) sqrt-warped depth coordinate compresses isotherm bands against the seam; (4) lens displacement amplitude decays exponentially with depth below the seam (physically apt — the gradient lives AT the thermocline — and cost/visual focus in one term); (5) the seam core is three 1.5px smoothstep lines offset ±1px vertically and tinted R/G/B — a literal prism blade that the bloom pass turns into the scene's signature glow.",
+      "glslSketch": "// ports: uFog uFlow uDepth uRefract uDisp uDark; value noise() as existing\nfloat fbm3(vec2 p){ float v=0.,a=.5; for(int i=0;i<3;i++){ v+=a*noise(p); p*=2.03; a*=.5; } return v; }\n\n// ---- the interface: function of x only, HARD ----\nfloat lineY(float x, float t){\n  float base = mix(0.42, 0.74, uDark);                 // arc: cold claims the frame\n  return base + 0.014*sin(x*6.0 - t*0.5)\n              + 0.007*sin(x*17.0 + t*1.1)\n              + 0.020*(noise(vec2(x*2.5, t*0.18)) - 0.5); // meniscus wobble\n}\n// ---- warm half: dying amber haze, shears LEFT ----\nvec3 warmField(vec2 uv, float t){\n  vec2 q = vec2(uv.x*ASPECT + t*0.012*(0.3+uFlow), uv.y);\n  float haze = fbm3(q*2.2);\n  vec2 sd = uv - vec2(0.38, 0.85);\n  float sun = exp(-dot(sd, sd*vec2(2.0, 5.0)));                 // sun-memory lobe\n  vec3 amber = mix(vec3(0.63,0.55,0.40), vec3(0.43,0.42,0.38), uDark); // warmth dies\n  vec3 col = amber*(0.55 + 0.30*haze) + vec3(0.90,0.85,0.74)*sun*(0.5*(1.0-uDark));\n  return mix(col, vec3(0.52,0.52,0.50), uFog*0.25);             // fog greys it\n}\n// ---- thin pale isotherm lines on dark ground ----\nfloat bands(float yw, float g){ return smoothstep(0.78, 0.99, 0.5+0.5*sin(yw*44.0 + g*3.0)); }\n// ---- cold half: striations through a wobbling lens, shears RIGHT ----\nvec3 coldField(vec2 uv, float ly, float t){\n  float d = ly - uv.y;                                          // depth below seam\n  vec2  q = vec2(uv.x*ASPECT - t*0.012*(0.3+uFlow), uv.y);      // opposite shear\n  float reach = exp(-d*(6.0 - 4.0*uDepth));                     // lens strongest at seam\n  float amp = uRefract * 0.05 * (0.35 + reach);\n  vec2 off = amp * vec2(noise(q*3.0 + vec2(t*0.15, 0.0)) - 0.5,\n                        noise(q*3.0 + vec2(0.0, t*0.11) + 7.3) - 0.5);\n  float g  = fbm3((q + off)*2.0);                               // shared grain — ONCE\n  float yw = sqrt(d + 0.02)*(2.0 + 1.5*uDepth);                 // sqrt packs bands at seam\n  float ds = uDisp * (0.006 + 0.02*reach);                      // fringe widens at seam\n  vec3 b = vec3(bands(yw + (off.y+ds)*1.6, g),                  // R displaced up\n                bands(yw +  off.y*1.6,      g),                 // G lens only\n                bands(yw + (off.y-ds)*1.6,  g));                // B down → RGB tear\n  vec3 col = mix(vec3(0.039,0.055,0.118), vec3(0.208,0.275,0.420), 0.25 + 0.5*g*reach);\n  col += b * mix(vec3(0.55,0.62,0.72), vec3(0.30,0.42,0.62), uDark); // lines cool w/ arc\n  col += vec3(0.63,0.55,0.40) * exp(-d*26.0) * 0.45 * (1.0-uDark*0.7); // TIR warm smear\n  return mix(col, vec3(0.30,0.34,0.40), uFog*0.35*(1.0-reach)); // fog lifts the deep\n}\nvoid main(){\n  float t = uTime; vec2 uv = vUv;\n  float ly = lineY(uv.x, t);\n  vec3 col = (uv.y > ly) ? warmField(uv, t) : coldField(uv, ly, t); // coherent branch\n  float w = 1.6 / uResolution.y;                                 // ~1.5 physical px\n  float po = 1.0 / uResolution.y;                                // 1px prism offset\n  vec3 blade = vec3(smoothstep(w, 0.0, abs(uv.y - ly - po)),     // R above\n                    smoothstep(w, 0.0, abs(uv.y - ly)),          // G on the line\n                    smoothstep(w, 0.0, abs(uv.y - ly + po)));    // B below\n  vec3 tint = mix(vec3(1.00,0.92,0.74), vec3(0.78,0.90,1.00), uDark); // warm→icy\n  col += blade * tint * (0.9 + 0.4*uRefract);                    // pad flares the blade\n  gl_FragColor = vec4(min(col, vec3(1.2)), 1.0);                 // cap pre-bloom blowout\n}",
+      "ports": [
+        {
+          "name": "fog",
+          "meaning": "veil density — greys the amber haze above the line, lifts the deep steel below it and softens striation contrast; never touches the blade",
+          "base": 0.35
+        },
+        {
+          "name": "flow",
+          "meaning": "shear rate of the two halves plus the seam's meniscus wobble speed",
+          "base": 0.35
+        },
+        {
+          "name": "depth",
+          "meaning": "striation compression (band frequency via the sqrt warp) and how far the lens displacement reaches below the seam",
+          "base": 0.3
+        },
+        {
+          "name": "refract",
+          "meaning": "lens displacement amplitude in the cold half plus blade flare brightness — the port that makes the pad audibly bend the image",
+          "base": 0.35
+        },
+        {
+          "name": "dispersion",
+          "meaning": "chromatic fringe separation on the striation lines and the prism blade — how far R and B tear apart from G",
+          "base": 0.3
+        }
+      ],
+      "audioHooks": [
+        {
+          "source": "fft.mid",
+          "target": "field.refract",
+          "behaviour": "the refractPad's body swells push refraction amplitude 0.35→0.8 with ~200ms attack / ~600ms release smoothing — striation lines visibly bow and the blade brightens in time with the pad's bends, never jittering"
+        },
+        {
+          "source": "fft.high",
+          "target": "field.dispersion",
+          "behaviour": "the glassy detuned top end of the pad widens the RGB fringe separation — when the pad shimmers, the isotherm lines split into rainbow hairlines and snap back as it dulls"
+        },
+        {
+          "source": "bassMeter.level",
+          "target": "field.depth",
+          "behaviour": "scaled gently (~0.15 of range): each sub-bass anchor momentarily compresses the band spacing — the water column tightens under weight, felt more than seen"
+        },
+        {
+          "source": "gesture.touchX",
+          "target": "field.flow",
+          "behaviour": "horizontal drag transiently accelerates the opposing shear, so stroking the screen makes the two worlds slide past each other"
+        }
+      ],
+      "postSettings": {
+        "bloomStrength": 0.9,
+        "bloomRadius": 0.3,
+        "bloomThreshold": 0.75,
+        "grainIntensity": 0.1
+      },
+      "arcResponse": "setArc(darkness) is the cold claiming the frame, not a brightness multiply. Four coupled moves as darkness sweeps the scene's [0.32, 0.46] window: (1) the line RISES from 0.42 to 0.74 frame-height — the cold half grows from under-half to dominant; (2) the amber above desaturates from #A18B66 towards ash-grey and the sun-memory lobe extinguishes (its term carries (1−uDark)); (3) the striation lines cool from pale steel-silver towards deep blue and the warm TIR smear under the seam fades out; (4) the prism blade's tint slides from warm silver-amber to icy blue-white. Entering the scene you are still in the sun's world looking down at the cold; leaving it you are in the cold looking up at a dying grey sliver — the hinge enacted compositionally.",
+      "stillFrame": "At t=0 the seam is frozen in a gentle S-curve (the two sine phases are chosen so the line dips left-of-centre and lifts right), sitting just below half-height. Above: flat faded amber-grey with the parchment sun lobe glowing softly at upper-left third. Below: a static stack of thin pale isotherm lines, packed tight against the seam and relaxing downwards, each one gently bowed by the frozen lens field (base refract 0.35 guarantees visible distortion with zero motion) with faint static R/B fringing. The warm reflection smear hangs beneath the blade. It reads as a composed photograph of an optical boundary — a horizon at dusk seen from underwater — and the thumbnail is unmistakable: bright blade, warm above, lined cold below.",
+      "gpuCost": {
+        "estimate": "cheap-to-moderate — warm half ≈3 value-noise evals; cold half ≈6 noise evals (1 lineY + 2 lens + 3 shared fbm) plus 3 cheap sin-based band calls, a few exp/smoothstep; comfortably at-or-below the current 5-octave-fbm scene and well inside the ~2x budget",
+        "notes": "The uv.y branch is screen-coherent (divergent warps only along the thin seam band), so each pixel genuinely pays one half's cost — implementers must keep it a real branch, not compute both fields and mix. Dispersion costs almost nothing because only the sin band term is re-evaluated per channel; the fbm grain is shared. Headroom remains at DPR 2 / 390px for the blade smoothsteps. No texture fetches, no history, constant loop bounds (two 3-iteration fbm loops)."
+      },
+      "crossfadeNotes": "Upward neighbour (sunlitShallows, warmer and brighter): the two warm upper regions are tonally adjacent, so the top of the frame blends invisibly while the steel-indigo lower half darkens the bottom of the shallows first — mid-fade reads as cold rising from beneath, then the blade condenses out of the gradient as opacity passes ~60%. Downward neighbour (twilight, darker): the amber half is the last element to dissolve — warmth literally dying on cue — and the blade thins to a ghost-horizon that stays legible at 50% opacity because it is the brightest pixel row and bloom (shared pass, post-blend per canvas) keeps a halo on it. Mud risk is low by design: the amber is already low-chroma, so amber-over-teal or amber-over-indigo mixes to neutral grey rather than green sludge, and mean luminance sits mid-key so the 50% point neither washes out nor blacks out.",
+      "risks": "(1) Sub-2px features — the blade and fringes — can alias or shimmer as the seam wobbles; widths MUST be expressed in physical pixels via uResolution.y (as sketched), and grainIntensity must stay ≤0.12 or grain eats the fringes. (2) A naive implementer may replace the hard branch with mix(warm, cold, smoothstep(...)) 'for safety', paying both halves everywhere and softening the line — the hard branch is both the look and the budget. (3) The additive blade plus sun lobe can blow out under bloom at arc extremes; the pre-bloom clamp at 1.2 and threshold 0.75 are load-bearing. (4) If the amber's chroma creeps up during tuning it will fight the warmer scenes' hue ownership and crossfade muddy — keep it greyed. (5) At extreme uDark the warm sliver gets thin; ensure the blade tint shift (not the amber) carries the scene identity in late-arc thumbnails."
+    },
+    {
+      "sceneId": "twilight",
+      "title": "Last Light",
+      "identity": "One pale violet beam failing from top-centre, full of falling marine snow that flares as it crosses the light, while an enormous whale-dark silhouette drifts past behind it.",
+      "concept": "The mesopelagic as theatre: a single weak cone of surface light — the last the descent will ever see — hangs from the top of the frame like a dying projector beam. The beam is barely visible in itself; it exists because the marine snow falling through it catches fire for a moment, the way dust reveals a cinema projector. Three parallax layers of snow give a depth-of-field eye: huge soft bokeh discs drifting close, a crisp in-focus mid plane, dim dust far off. And far behind everything, two vast soft-bodied silhouettes — barely darker than the water — cross the frame over a minute, made more present when the low strings swell. Elegiac, funereal, the AWVFTS heart: light at its own wake. Near-monochrome indigo/violet-grey; absolutely no teal — this is the violet scene.",
+      "palette": {
+        "hexes": [
+          "#070612",
+          "#241F3D",
+          "#8C7DC7",
+          "#C9BDED",
+          "#03020B"
+        ],
+        "description": "Indigo/violet-grey monochrome — the scene OWNS violet. Background: #070612 near-black indigo floor. Dominant: #241F3D violet-grey upper water column. Accent: #8C7DC7 heliotrope — the cone's scatter glow. Highlight: #C9BDED lavender-white — snow motes (the only thing approaching white, and only inside the beam). Silhouette ink: #03020B, kept within ~50% luminance of the field behind it so the creatures read as absences, not cutouts. Green channel is always the lowest of the three — that is what keeps it violet and never teal."
+      },
+      "structure": "A single vertical axis of light: wedge apex just above top-centre, spreading ~16° half-angle, gaussian reach ending around two-thirds down the frame — the one bright thing in a low-mid field. The snow field fills the frame uniformly (three planes of parallax), but luminance is concentrated where snow intersects the wedge, so the composition self-organises into a luminous triangle over a dark ground. Silhouettes occupy the lower half, crossing horizontally — one large in the lower-left third, one smaller nosing in at the right edge — giving the frame a foreground/midground/infinite-background stage depth. Vignette is centred slightly above middle (0.5, 0.55) so the beam's heart is the focal anchor in a 128px thumbnail.",
+      "motion": "FALL — everything sinks: front snow fastest (soft big discs streaming past the camera), mid plane steady, far dust almost still; the cone shimmers on a ~10 s period like light through a moving surface far above; silhouettes cross over 60–90 s, so slow you catch them mid-thought. Nothing in the scene changes faster than ~3 s — legato, bowed, matching duskStrings.",
+      "technique": "Grid-hash point fields (3 layers, per-layer cell scale + disc radius + edge blur = depth-of-field), an analytic volumetric wedge (angular smoothstep falloff × gaussian length attenuation × one octave of value-noise shimmer in the angle/length domain — no raymarch), and 3-ellipse smooth-min SDF creatures with a wide soft edge for distance blur. Key trick: snow brightness is multiplied by (1 + 3·cone), so the beam is rendered mostly by what it catches. The 5-octave fbm wash is deleted entirely — its budget pays for the cone and the beasts.",
+      "glslSketch": "// — Last Light: dying cone + DOF marine snow + leviathan silhouettes —\n// hash(vec2) and 2D value noise(p) as in the existing pass. NO fbm.\n\n// volumetric wedge from an apex above top-centre; p is aspect-corrected uv\nfloat cone(vec2 p, float aspect, float t, float dark){\n  vec2 d = p - vec2(0.5 * aspect, 1.30);          // apex off-screen above\n  float len = length(d);\n  float ang = atan(d.x, -d.y);                    // 0 = straight down\n  float halfA = 0.16 + 0.05 * uFog;               // fog widens the scatter\n  float edge  = smoothstep(halfA, halfA * 0.25, abs(ang));\n  float reach = mix(1.45, 0.85, dark);            // arc shortens the beam\n  float fall  = exp(-(len * len) / (reach * reach));\n  float ray   = 0.75 + 0.25 * noise(vec2(ang * 22.0, len * 2.0 - t * 0.35));\n  return edge * fall * ray;                       // godray banding, ~10 s shimmer\n}\n\n// one DOF snow layer: scale=cell density, blur=disc softness, spd=fall speed\nfloat snow(vec2 p, float t, float scale, float blur, float spd, float seed){\n  vec2 g = p * scale;  g.y += t * spd;  g.x += sin(t * 0.22 + seed) * 0.35;\n  vec2 id = floor(g);  vec2 f = fract(g);\n  float h = hash(id + seed);\n  if (h < 0.62) return 0.0;                       // sparse field\n  vec2  c = vec2(0.2 + 0.6 * hash(id + seed + 3.1), 0.2 + 0.6 * h);\n  float r = mix(0.05, 0.16, h);\n  return smoothstep(r + blur, r - r * 0.5, length(f - c)) * (0.25 + 0.75 * h);\n}\n\n// soft 3-ellipse smooth-min creature; wide edge = distance blur\nfloat beast(vec2 p, vec2 pos, float s, float flip){\n  vec2 q = (p - pos) / s;  q.x *= flip;\n  float body = length(q * vec2(1.0, 2.6)) - 0.55;\n  float tail = length((q - vec2(-0.85, 0.07)) * vec2(1.3, 3.4)) - 0.30;\n  float fin  = length((q - vec2( 0.15,-0.38)) * vec2(2.6, 1.5)) - 0.18;\n  float k = 0.25, h1 = clamp(0.5 + 0.5 * (tail - body) / k, 0.0, 1.0);\n  float d = mix(tail, body, h1) - k * h1 * (1.0 - h1);\n  float h2 = clamp(0.5 + 0.5 * (fin - d) / k, 0.0, 1.0);\n  d = mix(fin, d, h2) - k * h2 * (1.0 - h2);\n  return smoothstep(0.10, -0.02, d);\n}\n\nvoid main(){\n  float aspect = uResolution.x / max(uResolution.y, 1.0);\n  vec2  p = vec2(vUv.x * aspect, vUv.y);\n  float t = uTime * (0.5 + uFlow);\n  // indigo column — violet-grey up top, void below; depth pulls the dark up\n  vec3 col = mix(vec3(0.135, 0.118, 0.220), vec3(0.016, 0.012, 0.045),\n                 smoothstep(0.05, 0.95, (1.0 - vUv.y) * (0.8 + 0.5 * uDepth)));\n  col += uFog * 0.10 * vec3(0.30, 0.26, 0.42);    // ambient violet scatter\n  // silhouettes cross over ~80 s; phase constants compose the t=0 still\n  float ts = uTime * 0.012 * (0.5 + uFlow);\n  float bA = beast(p, vec2(fract(ts + 0.42) * (aspect + 1.2) - 0.6,\n                           0.38 + 0.06 * sin(uTime * 0.05)), 0.46, 1.0);\n  float bB = beast(p, vec2(aspect + 0.6 - fract(ts * 0.6 + 0.35) * (aspect + 1.2), 0.62), 0.30, -1.0);\n  float occl = max(bA, bB) * uPresence * (1.0 - uFog * 0.5);\n  col = mix(col, col * 0.50, occl);               // barely darker than the field\n  // the dying cone — gated and shortened by the arc, breathing with uLume\n  float cn = cone(p, aspect, t, uDark) * uLume * smoothstep(0.95, 0.30, uDark);\n  col += cn * vec3(0.55, 0.49, 0.78) * 0.55;      // heliotrope glow (#8C7DC7)\n  // three DOF snow planes; far dust hides behind the beasts; every mote\n  // flares inside the cone — dust in a projector beam\n  float farD = snow(p, t, 60.0, 0.010, 0.55, 27.0) * 0.35 * (1.0 - occl);\n  float midD = snow(p, t, 26.0, 0.015, 0.95, 13.0) * 0.85;   // in-focus plane\n  float nearD= snow(p, t,  9.0, 0.120, 1.60,  1.0) * 0.45;   // soft bokeh discs\n  col += (farD + midD + nearD) * (1.0 + cn * 3.0) * vec3(0.79, 0.74, 0.93);\n  col *= mix(1.0, 0.40, uDark * uDark);           // global arc floor\n  col *= mix(0.70, 1.0, smoothstep(1.25, 0.15, length(vUv - vec2(0.5, 0.55))));\n  gl_FragColor = vec4(col, 1.0);\n}",
+      "ports": [
+        {
+          "name": "fog",
+          "meaning": "ambient violet scatter density: lifts the background, widens the cone's half-angle, and dissolves the silhouettes (more fog = beasts fade into murk)",
+          "base": 0.45
+        },
+        {
+          "name": "flow",
+          "meaning": "fall rate of all three snow planes, cone shimmer speed, and silhouette crossing speed — the scene's single tempo",
+          "base": 0.3
+        },
+        {
+          "name": "depth",
+          "meaning": "pulls the black floor of the vertical gradient upward, compressing the lit zone toward the top of the frame",
+          "base": 0.5
+        },
+        {
+          "name": "lume",
+          "meaning": "cone intensity — the beam's brightness and, via the (1+3·cone) flare term, how fiercely snow ignites inside it; the breathing target",
+          "base": 0.55
+        },
+        {
+          "name": "presence",
+          "meaning": "silhouette opacity/contrast — how solid the crossing creatures are against the field",
+          "base": 0.4
+        }
+      ],
+      "audioHooks": [
+        {
+          "source": "masterMeter.level",
+          "target": "field.lume",
+          "behaviour": "Slow-smoothed (≈1 s attack, 2–3 s release in the control-rate route): the beam breathes with the string ensemble — a crescendo brightens the cone and every mote inside it flares, a decay lets the light gutter. The single most legible audio→visual bond in the scene."
+        },
+        {
+          "source": "fft.low",
+          "target": "field.presence",
+          "behaviour": "Heavily smoothed (1–2 s lag): when the low strings and sub-bass anchor swell, the silhouettes loom — opacity rises from ghost-faint toward unmistakable; when the lows thin out they all but vanish. Shapes should never flicker, only surface and submerge."
+        },
+        {
+          "source": "fft.high",
+          "target": "field.flow",
+          "behaviour": "Gentle, small range (≈±0.1 around base): bow noise and air in the strings stirs the snowfall slightly faster — felt rather than seen."
+        }
+      ],
+      "postSettings": {
+        "bloomStrength": 0.55,
+        "bloomRadius": 0.7,
+        "bloomThreshold": 0.55,
+        "grainIntensity": 0.12
+      },
+      "arcResponse": "setArc(darkness) drives the death of the light itself, not a brightness dial. Across the scene's live window (darkness ≈ 0.50 → 0.63): (1) the cone's gaussian reach shrinks — mix(1.45, 0.85, dark) — so the wedge visibly retracts upward, abandoning the lower frame; (2) the master cone gate smoothstep(0.95, 0.30, dark) drops from ~0.69 to ~0.49, so the beam thins and the snow-flare inside it dims with it; (3) the gradient floor deepens via the uDark² multiply, so the bottom of the frame approaches true void; (4) emergently, the silhouettes grow MORE present as the field behind them darkens — the relative contrast rises without touching presence — so as light dies, the beings remain. By the handover to the next scene the beam is a guttering stub at the very top of the frame: the descent has outlived the sun.",
+      "stillFrame": "At t=0 the frame is fully composed: the heliotrope wedge hangs from top-centre at full base intensity, its godray banding frozen mid-shimmer; the grid-hash snow field is position-deterministic, so the frame is already full of motes at all three focal depths — soft bokeh discs near, crisp dots mid, dust far — with the ones inside the wedge flared lavender-white. Phase constants (+0.42, +0.35) place creature A fully in frame in the lower-left third, head-right, and creature B nosing in from the right edge at upper-mid height. Reads as a held photograph of a beam of light in falling snow with something vast passing behind — no motion required.",
+      "gpuCost": {
+        "estimate": "cheap-to-moderate — per pixel: ~10–12 hash evaluations (one value-noise in the cone = 4, up to 6 across the three snow layers, plus the grain pass), 6 length ops + 2 smooth-mins for the beasts, 1 atan, 1 exp, ~10 smoothstep/mix. Cheaper than the shader it replaces (whose 5-octave fbm alone cost 20 hashes), and well inside the ≤2× fbm budget.",
+        "notes": "The fbm murk wash is deleted, which funds everything new. The early-return branch in snow() (h < 0.62) is coherent per grid cell, so divergence cost is negligible. No textures, no extra passes, constant loop bounds (none needed at all). Worst case is the top-centre region where cone + 3 snow layers + beast all evaluate — still bounded by the figures above since everything is evaluated unconditionally except the snow disc maths."
+      },
+      "crossfadeNotes": "The frame is mostly near-black (#070612) with sparse bright features, which is the safe shape for a linear opacity blend: mid-fade, both scenes' accents survive instead of summing to grey mud. Fading IN from the brighter scene above (arc < 0.46): that scene's residual light naturally reads as 'becoming' the cone — the top-centre wedge gives the upper neighbour's glow somewhere to collapse into, so the 6–8 s blend tells the story of surface light narrowing to a single beam. Fading OUT to the scene below (arc > 0.6): by then setArc has already withered the cone to a stub and the floor is near-void, so we hand over an almost-black frame with a few lavender motes — the next scene's accent colour appears against black, not against competing luminance. One coordination point: if the upper neighbour also has a strong top-centre bright feature, the overlap could double-expose the top of frame for a few seconds — worth a quick check of the two stills overlaid at 50%; if needed, ease lume down slightly in the last 10% of the arc range.",
+      "risks": "(1) Silhouette legibility: the 3-ellipse smooth-min must read as 'creature' not 'blob' — the ellipse aspect ratios, tail offset and the wide 0.10→-0.02 soft edge need real tuning passes on a phone screen; if a shape ever reads as a smudge, lengthen the tail ellipse and slow the crossing further. (2) Bloom threshold interplay: below ~0.5 threshold the whole snow field blooms into glowing porridge — 0.55 is deliberate so only cone-flared motes and the beam core bloom; verify after the per-scene post overrides land. (3) Violet drift: OutputPass tone-mapping can push the heliotrope toward blue — check the rendered hue on-device and keep the green channel lowest everywhere, or the scene loses its owned hue. (4) The atan in cone() is per-pixel; on very old GPUs it is the costliest single op here — if profiling flags it, replace the angular test with a normalised-direction dot product against vec2(0,-1) and threshold on the cosine. (5) Crossfade double-exposure at top-centre against the upper neighbour (see crossfade notes)."
+    },
+    {
+      "sceneId": "midnight",
+      "title": "Noctiluca",
+      "identity": "A drifting constellation of electric-cyan and bio-green plankton, each trailing a curved comet tail, scattered along a diagonal drift line on absolute black, with one scalloped jellyfish ring of light expanding like slow sonar.",
+      "concept": "At 600 metres the sun is a rumour; the only light left is alive. Noctiluca deletes the water entirely — no gradient, no fog field, no vignette, just void — and lets a shoal of ~14 living lights carry the whole frame. Each mote breathes on its own slow cycle, drags a tapering curved tail like a long-exposure photograph of plankton, and the whole constellation flares together on the drone's sub-bass breath: the pressureDrone literally inhales light. Once every nine seconds or so a jelly-bell ring is born bright and small somewhere in the dark and dies as it expands — the scene's sonar heartbeat. It is the piece's maximum-negative-space moment: the quietest frame and the most saturated colour, because bloom on pure black makes every photon precious.",
+      "palette": {
+        "hexes": [
+          "#000000",
+          "#19F5E1",
+          "#5CFF8F",
+          "#CFFFF2",
+          "#0B4A52"
+        ],
+        "description": "Owned hue family: saturated electric cyan to bio-green — the only scene permitted fully saturated emissives. #000000 absolute black field (no gradient: the bloom pass is the painter). #19F5E1 electric cyan is the dominant mote colour; #5CFF8F bio-green is the secondary mote tint (mix per point); #CFFFF2 aqua-white appears only at ring births and high-band flicker sparks; #0B4A52 desaturated deep teal is reserved for the fog scattering halos so the water around a light reads colder than the source. No blue-grey wash anywhere — that belongs to the other six scenes."
+      },
+      "structure": "A scattered constellation of ~14 points placed by an R2 low-discrepancy sequence squashed onto a loose diagonal drift line (lower-left toward upper-right), each point extended by a short curved trail that gives the frame a directional grain; one or two expanding circular wavefronts act as the counter-geometry — circles against the diagonal. Maximum negative space: roughly 95% of pixels are pure black. The only constellation scene; no field, no gradient, no vignette.",
+      "motion": "PULSE — adagio synchronised breathing: motes flare on the bass breath (slow attack/release, never strobing), individual sparks flick at ~110 ms as grace notes, and a ring wavefront blooms and dies on a ~9 s cycle; underneath it all an almost-still elliptical drift and a barely-visible marine-snow sink.",
+      "technique": "Single fragment pass, fully procedural. 14 motes on analytic elliptical orbits whose per-point constants come from golden-ratio/R2 fract sequences (zero hash-trig); the orbit's sin/cos pair is reused for free analytic velocity AND acceleration, so each curved comet trail is two tapering capsule-glow segments along the quadratic ghost path p − vτ + ½aτ² — no feedback buffer, no history texture. Light is three inverse-square kernels per mote: a hot pinprick core (peaks well above 1.0, the only thing that crosses the low bloom threshold), a fog-gated wide turbidity halo, and the trail capsules. Two phase-offset ring slots give 1–2 concurrent expanding wavefronts with an atan-scalloped jelly-bell rim and a born-bright/die-expanding envelope. Constant-bound loops, no texture fetches, GLSL1-style.",
+      "glslSketch": "// ---- per-point constants: low-discrepancy, no trig ----\nfloat h1(float i){ return fract(i*0.6180339887 + 0.36); }  // golden-ratio seq\nfloat h2(float i){ return fract(i*0.7548776662 + 0.13); }  // R2 component 1\nfloat h3(float i){ return fract(i*0.5698402910 + 0.71); }  // R2 component 2\n\n// ---- glow kernels ----\nfloat core(float d){ return 2.2e-5/(d*d + 6.0e-5); }       // hot pinprick, peak >> 1 -> blooms\nfloat halo(float d){ return 1.1e-3/(d*d + 0.030); }        // wide turbidity scatter (fog-gated)\nfloat trail(vec2 q, vec2 a, vec2 b){                       // tapering capsule glow\n  vec2 pa = q-a, ba = b-a;\n  float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);\n  float d = length(pa - ba*h);\n  return (1.0-h)*(1.0-h) * 2.4e-4/(d*d + 8.0e-4);          // bright at head, dies at tail\n}\n\nvoid main(){\n  float aspect = uResolution.x / max(uResolution.y, 1.0);\n  vec2 uv = vec2(vUv.x*aspect, vUv.y);\n  float t = uTime*(0.35 + uFlow*1.1);                      // flow = drift/ring tempo\n  vec3 col = vec3(0.0);                                    // TRUE BLACK -- no field at all\n  float flare = 0.55 + 1.45*uPulse;                        // bass breath, global\n  float alive = 1.0 - 0.55*uDark;                          // arc thins the shoal\n\n  for (int i = 0; i < 14; i++){\n    float fi = float(i);\n    float keep = 1.0 - smoothstep(alive-0.05, alive+0.05, h1(fi+13.0)); // smooth thinning\n    // anchor: R2 point squashed onto a diagonal drift line (composed at t=0)\n    vec2 a = vec2(h2(fi), h3(fi));\n    a.y = mix(a.y, 0.28 + 0.45*a.x, 0.45);  a.x *= aspect;\n    // elliptical drift -- ONE sin/cos pair shared by position, velocity, curvature\n    float w  = 0.25 + 0.35*h1(fi+9.0);\n    float th = w*t + 6.2832*h3(fi+4.0);\n    float s = sin(th), c = cos(th);\n    vec2 ax = (0.030 + 0.045*h2(fi+2.0)) * vec2(1.0, 0.55 + 0.5*h1(fi+5.0));\n    ax *= 1.0 - 0.45*uDark;                                // deeper: lights hang stiller\n    vec2 p = a + ax*vec2(s, c);\n    p.y = fract(p.y - uTime*0.004*uDepth);                 // marine-snow sink, wrapped\n    vec2 v  =  w*ax*vec2(c, -s);                           // analytic velocity (free)\n    vec2 ac = -w*w*ax*vec2(s, c);                          // analytic accel -> CURVED tail (free)\n    float tau = (0.5 + 1.1*uDepth) * 0.55/max(w, 0.2);     // depth = tail length\n    vec2 m = p - v*tau     + 0.5*ac*tau*tau;               // quadratic ghost path\n    vec2 e = p - v*2.0*tau + 2.0*ac*tau*tau;\n    // breathing: golden-angle phase spread => ~1/3 of motes lit in any still\n    float br = 0.30 + 0.70*pow(0.5 + 0.5*sin(t*(0.5+0.4*h2(fi+7.0)) + fi*2.39996), 4.0);\n    br *= flare * keep;\n    br *= 1.0 + 3.0*uFlicker*step(0.93, fract(h1(fi) + floor(uTime*9.0)*0.618)); // hi-band spark\n    br *= smoothstep(0.0, 0.08, p.y) * smoothstep(1.0, 0.92, p.y);  // hide the sink wrap\n    vec3 tint = mix(vec3(0.10,0.96,0.88), vec3(0.36,1.0,0.56), h3(fi+11.0)); // cyan <-> bio-green\n    tint = mix(tint, vec3(0.16,0.55,0.62), 0.4*uDark);     // arc: colder, deeper sources\n    float d = length(uv - p);\n    col += tint * br * ( core(d) + uFog*halo(d)\n                       + trail(uv, p, m)*0.9 + trail(uv, m, e)*0.45 );\n  }\n\n  // ---- jelly-pulse rings: two slots, half-cycle offset => 1-2 concurrent wavefronts ----\n  for (int r = 0; r < 2; r++){\n    float cyc = uTime/9.0 + 0.37 + float(r)*0.5;           // +0.37 => one ring mid-bloom at t=0\n    float id = floor(cyc), ph = fract(cyc);\n    vec2 cc = vec2(0.2 + 0.6*fract(id*0.618 + 0.17*float(r)),\n                   0.22 + 0.5*fract(id*0.755 + 0.31*float(r)));\n    cc.x *= aspect;\n    float rad = 0.05 + ph*(0.40 + 0.25*uFlow);             // wavefront expands\n    float dr  = abs(length(uv - cc) - rad);\n    float env = (1.0-ph)*(1.0-ph) * smoothstep(0.0, 0.05, ph) * (1.0 - 0.55*uDark);\n    float ang = atan(uv.y-cc.y, uv.x-cc.x);\n    float scallop = 0.78 + 0.22*sin(ang*9.0 + id*2.7);     // jellyfish bell rim\n    col += env*scallop*flare * 9.0e-4/(dr*dr + 7.0e-4) * vec3(0.55, 1.0, 0.92);\n  }\n  gl_FragColor = vec4(col, 1.0);\n}",
+      "ports": [
+        {
+          "name": "fog",
+          "meaning": "Water turbidity: width and intensity of the scattering halo around every light. Zero = needle-sharp points in vacuum-black; high = each mote sits in a soft teal ball of scattered light. Keeps the global field.fog route meaningful without ever adding a background field.",
+          "base": 0.25
+        },
+        {
+          "name": "flow",
+          "meaning": "Drift tempo: speed of the elliptical mote orbits, the individual breathing cycles, and the ring expansion rate. Keeps the global field.flow route working.",
+          "base": 0.3
+        },
+        {
+          "name": "depth",
+          "meaning": "Marine-snow weight: the slow downward sink of the whole constellation plus comet-tail length (deeper = longer, more viscous trails).",
+          "base": 0.5
+        },
+        {
+          "name": "pulse",
+          "meaning": "Scene-specific. Global bioluminescent flare: every mote and ring brightens together (x0.55 to x2.0) and glow cores widen — the breath of the shoal. Intended target of bassMeter.level.",
+          "base": 0
+        },
+        {
+          "name": "flicker",
+          "meaning": "Scene-specific. Gate for brief individual sparks: one or two motes flash white-green for ~110 ms (9 Hz quantised lottery). Intended target of fft.high.",
+          "base": 0
+        }
+      ],
+      "audioHooks": [
+        {
+          "source": "bassMeter.level",
+          "target": "field.pulse",
+          "behaviour": "The pressureDrone breathes light: the entire constellation and any live ring flare together, brightness x0.55 at silence to x2.0 at full sub-bass, with slow control-rate smoothing (attack ~150 ms, release ~600 ms) so it reads as breathing, never strobing. This is the scene's signature audio-visual bond."
+        },
+        {
+          "source": "fft.high",
+          "target": "field.flicker",
+          "behaviour": "Tape hiss, bell transients and high-band crackle make individual motes spark: a 9 Hz-quantised lottery picks ~1 mote to flash 4x brightness toward white-green for one slot. Subtle at base, vivid on bright transients — the shoal reacts nervously to high frequencies."
+        },
+        {
+          "source": "fft.low",
+          "target": "field.fog",
+          "behaviour": "Low-end swell thickens the water: the teal scattering halo around each light grows from base 0.25 toward ~0.45 on sustained low energy, so heavy drone passages make the lights feel submerged in syrup. Gentle range, heavily smoothed."
+        },
+        {
+          "source": "gesture.touchY",
+          "target": "field.depth",
+          "behaviour": "Dragging a finger down the screen lengthens the comet tails and accelerates the marine-snow sink — the user stirs the water column. Optional, but it makes the only constellation scene tactile."
+        }
+      ],
+      "postSettings": {
+        "bloomStrength": 1.6,
+        "bloomRadius": 0.6,
+        "bloomThreshold": 0.15,
+        "grainIntensity": 0.06
+      },
+      "arcResponse": "setArc(darkness) is population, stillness and temperature — never a brightness multiply. As the descent crosses [0.6, 0.74]: the shoal thins smoothly from ~14 lit motes toward ~7 (each mote's keep-threshold tested against its golden-ratio id, smoothstepped so none pop); drift amplitude shrinks by up to 45% so the survivors hang stiller in the water; mote tint slides from electric cyan/green toward a colder, deeper blue-green; and the jelly rings fade toward rarity (envelope x(1 − 0.55·darkness)). The frame becomes sparser, slower and lonelier — fewer, stiller, colder lights — which is exactly the right hand-off into Abyssal: the constellation dies out rather than dims out.",
+      "stillFrame": "Absolute black. Fourteen motes scattered by the R2 sequence along a loose diagonal band rising left-to-right; because pulse phases are spread by the golden angle, roughly a third are near full flare (hot cyan/green cores bloomed by the post chain), the rest are dim embers. Every mote shows a short curved comet tail (the trails are analytic, so they exist without motion). One scalloped jelly ring sits mid-expansion in the lower third at a pleasing radius (ring slot phase offset +0.37 guarantees it), with a second faint, almost-spent ring ghost large in the frame. Composed, legible, unmistakable at 128 px: lights alive in a void.",
+      "gpuCost": {
+        "estimate": "moderate — per pixel: 14 motes x (2 orbit trig + 1 breath sin + 3 length/sqrt distance evals + ~3 div + ~10 fract/mads) plus 2 rings x (1 atan + 1 sin + 1 sqrt + 1 div) ≈ 45 trig + 45 sqrt + 35 div total; roughly 1.5–2x the old 5-octave fbm pass, inside the ~2x budget.",
+        "notes": "All per-point 'randomness' is fract-of-golden-ratio (no sin-hash), velocity/acceleration reuse the orbit's single sin/cos pair, and both loops have constant bounds with uniform cost (no divergent branching). No texture fetches at all in the layer. The real frame cost is UnrealBloom at threshold 0.15, which is shared infrastructure; if a mid-range iPhone profile shows pressure, drop to 12 motes and remove the second trail segment (straight tails) for ~25% layer savings with minimal visual loss."
+      },
+      "crossfadeNotes": "Noctiluca is the safest crossfade partner in the set because ~95% of its pixels are zero: a linear opacity blend against it is effectively additive. Fading in from Twilight, the mid-blend reads as the last grey light dying while the first living lights surface through the haze — Twilight's field dims to 50% and the bloomed cyan cores (pre-bloom values >1.5) still punch through it clearly, so there is no mud, only a gloaming with emerging stars. Fading out into Abyssal, the constellation thins (arc darkness is already high at 0.74) and the surviving sparse motes hang over Abyssal's incoming geometry like the last lanterns going out. One care: both neighbours should avoid large bright areas in their own lower-third at the boundary arcs, or the half-opacity ring wavefront loses contrast mid-fade — the ring envelope's darkness gating already suppresses rings near the lower boundary, which helps.",
+      "risks": "1) Flow-as-timescale: t = uTime*(0.35 + flow*1.1) means a fast flow modulation jumps the orbit phase (existing codebase convention shares this; keep flow routes heavily smoothed, or later integrate phase CPU-side and pass it as a uniform). 2) Black-floor creep: 14 overlapping fog halos can lift the void to a visible grey — halo gain is deliberately tiny and fog-gated; verify the post-bloom floor stays below ~0.01 or the true-black identity (and the clean luma-scaled grain) is lost. 3) Bloom threshold 0.15 with hot cores must not bloom the trails into mush — trails peak ~0.3–0.5 pre-bloom by design; tune trail gain before bloom settings. 4) During a 7 s crossfade two composers run two bloom passes concurrently — the layer is cheap but profile the boundary on a mid-range iPhone; the 12-mote fallback exists. 5) The fract() sink-wrap pops if depth is modulated hard; the top/bottom edge brightness fade hides it but keep depth routes gentle. 6) Reduced motion: uTime frozen freezes flicker and rings too — the +0.37 ring phase offset ensures the frozen frame still contains a composed ring, so nothing depends on motion to read."
+    },
+    {
+      "sceneId": "abyssal",
+      "title": "Leviathan's Flank",
+      "identity": "An enormous black ridged silhouette occupies most of the frame on a tilted diagonal, against a thin flat seam of grey-green water, with one pale sonar ring grazing its contour.",
+      "concept": "This is the negative-space scene: the frame is mostly occupied mass, and the picture is the thing you cannot see into. A single vast form — flank, ridge, spine, deliberately ambiguous between landform and animal — rises from the lower-right on a ~12° tilt, its skyline cut by sharp ridged-noise creases against a barely lighter column of open water. Nothing glows, nothing flows; the only colour is an exhausted grey-green, the only light a dying flat band, the only event a slow sonar wavefront that expands from somewhere inside the mass every ~11 seconds and, for a moment, rims the silhouette's contour like a returning echo before decaying into the dark. The mass breathes — a few pixels of rise and fall on a ten-second cycle, swelling with the leviathan's sub-bass — which is what tells you it is not the sea floor. Matte, patient, mournful: the scene where the descent stops being scenery and becomes company.",
+      "palette": {
+        "hexes": [
+          "#050706",
+          "#0B0F0D",
+          "#222A26",
+          "#5C6660",
+          "#8FA396"
+        ],
+        "description": "Near-achromatic grey-green monochrome — the only desaturated scene in the set, and that absence of chroma is its owned hue. #050706 is the mass (matte near-black with a green corpse-tint), #0B0F0D the deep water, #222A26 the open-water band at its brightest, #5C6660 dust and faint sonar wash, #8FA396 (pale sage) reserved exclusively for the sonar rim at the contour — the single brightest value in the scene, and still grey. No blues, no teals: by arc position 0.8 the ocean has stopped having a colour."
+      },
+      "structure": "Massive dark shape vs thin band of open water, divided by one diagonal contour. Coordinates are rotated ~-12° so the silhouette skyline — a 1D ridged-multifractal height profile — cuts the frame from lower-left to upper-right; the mass owns the bottom ~55–75% (growing with depth/arc), the open band the upper-left wedge. The sonar origin (the 'heart') sits inside the mass off lower-right, so rings expand outward across the contour at an angle, never concentric to the frame. In a 128px thumbnail: black wedge, pale seam, one arc of light kissing the boundary. The contour line IS the composition.",
+      "motion": "STILLNESS — the slowest scene by far. The mass breathes (~10 s sine, 0.5–3% of frame height, bass-driven); a sonar wavefront expands once per ~11 s over ~7 s; marine-snow motes drift at minutes-per-screen. Nothing else moves. Even at flow=1 all rates stay glacial by construction.",
+      "technique": "Ridged value-noise multifractal, used twice: a 1D slice (noise sampled along a constant-y line) with ridge feedback weighting builds the silhouette skyline as a height profile H(x) — sharp creases, not soft fbm — giving a signed distance d = q.y − H(q.x) that drives a hard edge mask, an interior crease-reveal falloff exp(d·k), and the sonar rim mask exp(−|d|·k). A 4-octave anisotropic 2D ridged fbm (stretched 1:2 laterally) provides long fold detail that only reads within ~1/22 uv of the edge — the interior stays matte black. The sonar is a thin Gaussian annulus exp(−(|q−heart|−R(t))²·900) with quadratic decay over progress, multiplied by three medium masks (contour rim, open-water wash, interior crease paint). Dust is one thresholded value-noise sample. Key tricks: rotation makes a cheap 1D profile read as monumental diagonal geometry; everything expensive is reused (d feeds edge, rim, fog shaping); phase offset on the sonar clock guarantees a composed t=0 still.",
+      "glslSketch": "// assumes existing hash(vec2)/noise(vec2) value-noise helpers (as in abyssalPlain.ts)\nfloat ridge(float n){ float r = 1.0 - abs(2.0*n - 1.0); return r*r; }      // sharp crease\nfloat ridged1D(float x, float seed){                                        // skyline, 5 oct\n  float v = 0.0, a = 0.5, w = 1.0, f = 1.0;\n  for (int i = 0; i < 5; i++){\n    float r = ridge(noise(vec2(x*f, seed)));\n    v += a * w * r;\n    w = clamp(r * 1.6, 0.0, 1.0);            // feedback: ridges beget sub-ridges\n    f *= 2.13; a *= 0.5;\n  }\n  return v;                                   // ~0..1\n}\nfloat ridged2D(vec2 p){                                                     // folds, 4 oct\n  float v = 0.0, a = 0.5;\n  for (int i = 0; i < 4; i++){ v += a * ridge(noise(p)); p = p*2.07 + 11.3; a *= 0.5; }\n  return v;\n}\nfloat fbm3(vec2 p){ float v=0.0,a=0.5; for(int i=0;i<3;i++){ v+=a*noise(p); p*=2.02; a*=0.5; } return v; }\n\nvoid main(){\n  float aspect = uResolution.x / max(uResolution.y, 1.0);\n  float ca = cos(-0.21), sa = sin(-0.21);                  // ~ -12 deg world tilt\n  vec2 q = mat2(ca, -sa, sa, ca) * vec2(vUv.x * aspect, vUv.y);\n  float arc = smoothstep(0.70, 0.95, uDark);               // local remap of this scene's residency\n\n  // — the mass: 1D ridged skyline + slow breath (bass-driven via uPulse) —\n  float breath  = (0.005 + 0.022*uPulse) * sin(uTime*0.62 + q.x*0.9);   // ~10 s cycle\n  float profile = 0.36 + 0.18*arc + 0.10*uDepth\n                + 0.16 * ridged1D(q.x*6.0 + 3.0, 7.0) + breath;\n  float d      = q.y - profile;                            // signed height above contour\n  float inside = 1.0 - smoothstep(0.0, 0.0035, d);         // hard silhouette\n\n  // — open water: flat grey-green band, light dying with the arc —\n  float shimmer = fbm3(vec2(q.x*1.4, q.y*2.0) + uTime*0.008*(0.3 + uFlow));\n  float above   = clamp(d * 2.2, 0.0, 1.0);\n  vec3 paleW    = vec3(0.135, 0.157, 0.145) * mix(1.0, 0.32, arc);\n  vec3 water    = mix(vec3(0.027,0.035,0.031), paleW, pow(above, 0.7) * (0.8 + 0.2*shimmer));\n\n  // — mass interior: matte; creases whisper only near the contour —\n  float crease   = ridged2D(q * vec2(2.6, 5.2));           // long lateral folds\n  float nearEdge = exp(d * 22.0) * inside;                 // decays into the body\n  vec3 mass = vec3(0.016,0.022,0.019) + crease * nearEdge * vec3(0.030,0.038,0.034);\n\n  // — sonar: one wavefront every T s from the heart; phase-offset composes t=0 —\n  const float T = 11.0;\n  vec2  heart = vec2(aspect*0.85, 0.02);                   // inside the mass, low-right (q-space)\n  float prog  = fract((uTime + 0.35*T) / T);\n  float dr    = length(q - heart) - prog * 1.9;\n  float front = exp(-dr*dr * 900.0) * (1.0-prog)*(1.0-prog) * (0.35 + 0.65*uSonar);\n  float edgeBand = exp(-abs(d) * 70.0);\n  vec3 rim   = front * edgeBand * 2.4        * vec3(0.56,0.64,0.59);  // THE event: contour reveal\n  vec3 wash  = front * (1.0-inside) * 0.10   * vec3(0.33,0.38,0.35);  // faint pressure arc in water\n  vec3 paint = front * inside * crease * 0.5 * vec3(0.22,0.27,0.24);  // echo paints the flank\n\n  // — sparse marine snow, water only, glacial drift; thins with depth —\n  float mote = smoothstep(0.992 + 0.004*arc, 1.0,\n                          noise(q*38.0 + vec2(uTime*0.012*(0.2+uFlow), uTime*0.006)));\n  vec3 dust  = mote * (1.0-inside) * 0.18 * vec3(0.36,0.40,0.37);\n\n  vec3 col = mix(water, mass, inside) + rim + wash + paint + dust;\n  float veil = uFog * (0.35 + 0.40*arc);                   // fog closes mass/water contrast\n  col = mix(col, vec3(0.047,0.055,0.051), veil * (1.0 - edgeBand*0.5));\n  col *= mix(1.0, 0.86, smoothstep(0.55, 1.35, length(vUv - vec2(0.38, 0.72)))); // whisper vignette\n  gl_FragColor = vec4(col, 1.0);\n}",
+      "ports": [
+        {
+          "name": "fog",
+          "meaning": "Density of the water-column veil that closes the contrast gap between mass and open water — at high values the silhouette nearly dissolves (the global field.fog route keeps working; also the crossfade softener)",
+          "base": 0.3
+        },
+        {
+          "name": "flow",
+          "meaning": "Drift rate of the marine snow and the open-water shimmer — deliberately mapped to tiny ranges so even flow=1 stays glacial (global field.flow route compatible)",
+          "base": 0.15
+        },
+        {
+          "name": "depth",
+          "meaning": "How much of the frame the mass occupies — lifts the silhouette profile, shrinking the open-water band toward a sliver",
+          "base": 0.45
+        },
+        {
+          "name": "pulse",
+          "meaning": "Breathing displacement amplitude of the silhouette — the mass's slow heave; intended target for bassMeter.level",
+          "base": 0.25
+        },
+        {
+          "name": "sonar",
+          "meaning": "Brightness of the sonar return (rim, wash and interior paint together); intended target for masterMeter.level — quiet music makes the ring nearly vanish",
+          "base": 0.6
+        }
+      ],
+      "audioHooks": [
+        {
+          "source": "bassMeter.level",
+          "target": "field.pulse",
+          "behaviour": "The leviathan's sub-bass swells drive the mass's breathing amplitude: at rest the silhouette rises and falls ~0.5% of frame height on its 10 s cycle; when the DuoSynth's octave-down sub blooms, the heave roughly quadruples (to ~2.7%). Route control-rate with heavy smoothing (slew ≥ 1 s) so the form heaves with the music's breath and never twitches — the displacement is what proves the shape is alive."
+        },
+        {
+          "source": "masterMeter.level",
+          "target": "field.sonar",
+          "behaviour": "The sonar ring's return brightness rides the master level: the wavefront fires on its fixed ~11 s clock regardless, but a loud ensemble passage makes the contour reveal blaze to its pale-sage peak while a near-silent passage leaves only a ghost arc. Smoothed over ~300 ms so the ring's brightness tracks the musical swell it crosses, making the event feel like the music ensonifying the dark."
+        },
+        {
+          "source": "fft.low",
+          "target": "field.fog",
+          "behaviour": "Optional, subtle (scale ≤ 0.15 depth): sustained low-frequency energy slightly thickens the veil, so heavy sub passages press the water and mass closer together in contrast. Keep the route amount small — fog is also the crossfade tool and must not pump."
+        }
+      ],
+      "postSettings": {
+        "bloomStrength": 0.15,
+        "bloomRadius": 0.25,
+        "bloomThreshold": 0.8,
+        "grainIntensity": 0.14
+      },
+      "arcResponse": "The scene is resident while global darkness runs ≈0.78→0.92, so it remaps that window locally (smoothstep(0.70, 0.95, darkness)) rather than multiplying brightness. As the local value rises, three things happen in concert: the open-water band's luminance falls from 0.135-peak grey-green toward a third of that (light dying), the silhouette profile lifts by up to 18% of frame height (weight growing — the mass claims the frame), and the marine snow thins as fewer motes catch light. The composition inverts across the scene's residency: it enters as 'water containing a shape' and leaves as 'mass containing a crack of water' — a thin pale seam at the top with the sonar rim as the only remaining legible feature. The fog veil also strengthens with arc, so the deepest version is flatter and closer to total matte before handing to the next scene.",
+      "stillFrame": "The sonar clock carries a +0.35T phase offset, so at t=0 the wavefront is mid-traverse at radius 0.35·max — frozen exactly where it grazes the silhouette: a pale sage arc rimming a stretch of the contour, with its fainter wash visible in the open band above. Composition at rest: the black ridged mass fills the lower-right two-thirds on its diagonal, the flat grey-green band sits upper-left with a gentle vertical falloff, four or five dim motes hang in the water, and the breath sine (phase chosen non-zero) holds the skyline at a believable mid-inhale. Every element is positional, none depends on motion — the still reads as a held breath, which is the scene's whole temperament.",
+      "gpuCost": {
+        "estimate": "cheap — ≈13 value-noise samples per pixel (5 skyline + 4 fold + 3 water + 1 dust) plus 3 exp(), 1 length(), 1 mat2 rotate; at or below the current abyssalPlain's ~16 noise samples and well under the ~2x-fbm budget",
+        "notes": "All constant-bound loops, no texture fetches, no branches (masks are multiplies). Headroom exists: the 2D fold fbm can drop to 3 octaves with minimal loss since it only reads near the contour. The Gaussian ring and exp falloffs are scalar transcendentals, negligible next to the noise. Comfortably inside ~4 ms at 390px/DPR 2 on iOS Safari."
+      },
+      "crossfadeNotes": "This scene contributes almost no midtone, which is exactly what a linear opacity blend wants: mixing near-black with the (brighter, more chromatic) preceding scene reads as that scene darkening, not as grey soup. Mid-fade on entry, the silhouette appears as a translucent dark wedge looming up through the previous scene's water — the mass literally arrives before its world does, which is the concept on a plate. The flat band is too low-contrast to double-expose noticeably. The 11 s sonar period with phase offset guarantees at least one ring event lands inside every 8 s fade window, and the rim stays legible at 50% opacity because it is the only thin bright element on screen. On exit toward the deeper neighbour, the pale band is the last thing to extinguish — light dying on cue. One caution: keep the neighbours' fog routes from spiking during the blend, since fog here is what dissolves the silhouette.",
+      "risks": "(1) Banding in the large near-black flats on 8-bit OLED — the raised grain (0.14, luma-scaled so blacks get ~0.02 dither) is the first defence; if banding survives, add a 1/255 hash dither inside the layer. (2) The skyline could read as 'mountains' rather than presence — keep the low octaves dominant (one or two big humps across the width) and never ship without the breath route, which is what sells animacy. (3) The thin Gaussian ring (width ~1/30 uv) may shimmer at DPR 1 — widen the exponent resolution-dependently if it sparkles. (4) The hard edge smoothstep (0.0035 uv ≈ 2–3 px) may alias on low-DPR devices — widen slightly rather than adding fwidth. (5) Stillness can be mistaken for a hang — dust drift and breath have non-zero base rates even at flow=0 by design; do not let a studio edit zero them. (6) The achromatic palette depends on the OTHER six scenes staying chromatic — if any neighbour desaturates, this scene's owned identity erodes; flag in the set-wide review."
+    },
+    {
+      "sceneId": "descent",
+      "title": "The Throat",
+      "identity": "An absolutely black disc dead ahead, rimmed by one thin hot crimson ring, with red-to-ultraviolet filament arms spiralling into it like water down a drain.",
+      "concept": "The final scene is the only place in the descent that looks back at you: a slow vortex with an event horizon. Everything the previous six scenes established — light, colour, texture — is shown being eaten. Seven filament arms of deep crimson spiral inward in log-polar space (scale-invariant infall, so the swallow never visibly loops), tearing into RGB fringes as they approach a perfectly black core whose edge is licked by the filaments themselves. The only warmth left in the piece is the thin ring of light that cannot quite escape — matching voidChoir's \"end of the world, strangely warm\". Ultraviolet glazes the outer rim of the frame: the last light, shifted out of the visible. As arc→1 the core dilates until the frame is almost entirely void and the ring is all that remains.",
+      "palette": {
+        "hexes": [
+          "#07000d",
+          "#9c1228",
+          "#3a0414",
+          "#5d2bd4",
+          "#ffd6d0"
+        ],
+        "description": "Black-violet void (#07000d) background — deliberately violet-black, never the blue-teal of the other scenes. Deep crimson (#9c1228) is the dominant, OWNED hue: the filament body, fading through dried-blood maroon (#3a0414) in the shadows. Ultraviolet (#5d2bd4) glazes only the outer rim of the frame and hugs the horizon as a thin haze. The hot ring is pale crimson-white (#ffd6d0) — pink-white, explicitly not ember-orange; the old shader's orange is killed. This is the set's only red-family scene; no other scene may use crimson or violet as a dominant."
+      },
+      "structure": "RADIAL — the set's only polar/centripetal composition. One focal core placed slightly above centre (vUv origin (0.5, 0.55), good for 390px portrait with UI at the bottom); seven log-spiral filament arms converge on a luminous horizon ring around an absolutely black disc; concentric palette bands organise depth: ultraviolet outer rim → crimson mid-field → hot ring → void. Every line in the frame leads in.",
+      "motion": "ROTATION + infall — a continuous, slow spiral collapse. Log-space translation makes the infall scale-invariant and non-repeating: glacial at the rim, perceptibly faster at the horizon (differential rotation via the v-dependent twist term). Bass surges the swallow; nothing ever ticks or loops.",
+      "technique": "Log-polar domain ridged fbm (this scene's owned technique, intensified from the current abyss.ts). Key tricks: (1) anisotropic q-scaling (squash along log-r) turns noise into long inward streaks; (2) chromatic aberration as a log-r offset — offsetting v=log(r) is exactly a multiplicative radial offset, so 2 cheap extra ridged-fbm evaluations give physically-plausible radial RGB fringing that grows toward the horizon; (3) analytic horizon: exp falloff ring around a hard smoothstep core mask, with the core edge perturbed by the filament field so the void looks licked, not stamped; (4) the atan singularity at the centre is always hidden inside the black core — free robustness.",
+      "glslSketch": "// hash/noise (value noise) identical to current abyss.ts boilerplate\nconst float TAU = 6.28318530718;\nfloat ridge(float n){ float v = 1.0 - abs(2.0*n - 1.0); return v*v; }\nfloat rfbm4(vec2 p){ float v=0.,a=.5; for(int i=0;i<4;i++){ v+=a*ridge(noise(p)); p*=2.13; a*=.55; } return v; }\nfloat rfbm2(vec2 p){ float v=0.,a=.6; for(int i=0;i<2;i++){ v+=a*ridge(noise(p)); p*=2.13; a*=.55; } return v; }\nfloat fbm3 (vec2 p){ float v=0.,a=.5; for(int i=0;i<3;i++){ v+=a*noise(p);        p*=2.03; a*=.5;  } return v; }\n\nvoid main(){\n  vec2 p = (vUv - vec2(0.5, 0.55)) * vec2(uResolution.x / max(uResolution.y,1.0), 1.0);\n  float r   = length(p) + 1e-4;\n  float ang = atan(p.y, p.x) / TAU;                       // 0..1\n  float t   = (uTime + 31.7) * (0.04 + uFlow * 0.20);     // +31.7s phase seed => composed t=0 still\n\n  // ---- the horizon: core radius grows with the arc, gulps with the maw port ----\n  float Rc = mix(0.055, 0.58, pow(uDark, 1.35)) + uMaw * 0.10;\n\n  // ---- log-polar spiral frame: u wraps the angle, v = log r is the infall axis ----\n  float v_    = log(r);\n  float twist = 1.6 + uDepth * 2.2;                        // spiral tightness (depth port)\n  float u_    = ang + v_ * (twist / TAU) + t * 0.10;       // v-dependence = differential rotation\n  vec2  q     = vec2(u_ * 7.0, v_ * 1.05 - t * 0.85);      // 7 arms; -t on v = endless infall\n\n  // ---- filaments: warped, anisotropic ridged fbm (long streaks along the inflow) ----\n  float w  = fbm3(q * 1.7) - 0.5;                          // scalar warp (cheap; vec2 if budget allows)\n  vec2  qa = q * vec2(2.6, 0.8) + w * 0.9;                 // squash along v => threads, not blobs\n  float fil = rfbm4(qa);\n\n  // ---- chromatic fringe: offset v => multiplicative radial offset; grows toward horizon ----\n  float ca   = mix(0.004, 0.024, uDark) * smoothstep(1.1, Rc, r);\n  float filR = rfbm2(qa + vec2(0.0, -ca * 14.0));          // sampled inward\n  float filB = rfbm2(qa + vec2(0.0,  ca * 14.0));          // sampled outward\n  vec3  fr   = vec3(filR, fil, filB);                      // RGB separation, radial direction\n\n  // ---- radial palette bands: crimson body -> ultraviolet rim; hot knots near the ring ----\n  vec3 violet  = vec3(0.21, 0.10, 0.55);\n  vec3 crimson = vec3(0.55, 0.05, 0.13);\n  vec3 hot     = vec3(1.00, 0.62, 0.58);                   // pink-white, NOT orange\n  float band = smoothstep(Rc + 0.05, 1.0, r);\n  vec3 body  = mix(crimson, violet, band * (0.55 + 0.45 * uDark));  // arc cools the field\n  vec3 col   = body * fr * (0.55 + uGlow * 0.9);                    // glow port = emission gain\n  col += hot * pow(fr.g, 3.0) * (0.25 + uGlow * 0.6) * smoothstep(0.9, Rc, r); // bright knots\n\n  // ---- the ring: analytic hot rim on an organically perturbed horizon ----\n  float edge = Rc * (1.0 + (fil - 0.5) * 0.06);            // filaments lick the void edge\n  float ring = exp(-abs(r - edge) * (26.0 - uDark * 10.0));// ring thins+sharpens... widens glow as arc->1\n  col += hot    * ring * (0.8 + uMaw * 0.8);\n  col += violet * exp(-abs(r - edge) * 9.0) * 0.25;        // UV haze hugging the horizon\n\n  // ---- fog: crimson dust veil outside the horizon (keeps field.fog meaningful) ----\n  col += uFog * 0.08 * crimson * (0.4 + 0.6 * fil) * smoothstep(Rc, 1.2, r);\n\n  // ---- the swallow: absolute black inside; frame closes as the arc ends ----\n  col *= smoothstep(edge - 0.012, edge + 0.018, r);        // hard core (hides atan singularity)\n  float vign = smoothstep(1.45, 0.30, r);                  // outer light dies harder with uDark\n  col *= mix(0.9, vign, 0.35 + uDark * 0.5);\n\n  gl_FragColor = vec4(col, 1.0);\n}",
+      "ports": [
+        {
+          "name": "fog",
+          "meaning": "Crimson dust veil suspended outside the horizon — lifts the mid-field haze. Keeps the global field.fog matrix route working; in this scene fog glows faintly red rather than washing blue.",
+          "base": 0.25
+        },
+        {
+          "name": "flow",
+          "meaning": "Infall + rotation speed multiplier (global field.flow route). 0 = near-frozen collapse, 1 = visible swallowing.",
+          "base": 0.4
+        },
+        {
+          "name": "depth",
+          "meaning": "Spiral twist and filament anisotropy — higher pulls the arms tighter and threadier; doubles as the differential-rotation amount.",
+          "base": 0.5
+        },
+        {
+          "name": "maw",
+          "meaning": "Scene-specific: extra core dilation (+10% radius at full) and ring heat on top of the arc's swallow — the throat gulps.",
+          "base": 0.15
+        },
+        {
+          "name": "glow",
+          "meaning": "Scene-specific: filament emission gain — pushes the brightest knots over the bloom threshold so loudness literally lights the spiral.",
+          "base": 0.45
+        }
+      ],
+      "audioHooks": [
+        {
+          "source": "fft.low",
+          "target": "field.flow",
+          "behaviour": "Sub-bass energy multiplies infall/rotation speed. Smooth over ~300ms so bass swells read as the vortex surging forward, then relaxing back to a glacial drift in quiet passages — the collapse breathes with the low end of voidChoir."
+        },
+        {
+          "source": "masterMeter.level",
+          "target": "field.glow",
+          "behaviour": "Overall loudness lifts filament emission so knot highlights cross the bloom threshold — the detuned saw choir visibly ignites the spiral arms; at silence the arms sink to matte crimson and only the ring remains lit."
+        },
+        {
+          "source": "bassMeter.level",
+          "target": "field.maw",
+          "behaviour": "The sub-bass anchor dilates the core a few percent and heats the ring on each pedal note — the throat gulps. Keep modulation depth small (≤0.15 of the port range) so the horizon stays compositionally stable."
+        },
+        {
+          "source": "gesture.touchY",
+          "target": "field.depth",
+          "behaviour": "Optional, subtle: dragging downward tightens the spiral twist slightly — a tactile sense of steering the fall. Depth ≤0.2; the arc remains the primary driver of doom."
+        }
+      ],
+      "postSettings": {
+        "bloomStrength": 1.15,
+        "bloomRadius": 0.55,
+        "bloomThreshold": 0.62,
+        "grainIntensity": 0.16
+      },
+      "arcResponse": "setArc(darkness) IS this scene's narrative, not a brightness multiply — four coupled effects: (1) core radius Rc grows from a pupil (0.055) to 0.58 frame-half-heights via pow(darkness,1.35), so by arc=1 the void has eaten ~80% of the 390px frame; (2) chromatic aberration scale grows 0.004→0.024 — colour physically tears apart as the end approaches; (3) the filament body cools from crimson toward ultraviolet (the band*0.45*uDark term) and the outer vignette clamps down, so total scene luminance collapses inward; (4) the ring's exp falloff softens (26→16) while uMaw heats it, so the last light gets wider and warmer even as everything else dies — the 'strangely warm' ending. At darkness≈1 the frame is a black field, one breathing pink-white ring, a few violet threads in the corners.",
+      "stillFrame": "At t=0 (prefers-reduced-motion) the fixed +31.7s phase seed lands a composed frame: a black disc slightly above centre (≈0.3 frame-height radius at scene-entry darkness ~0.8), a thin pale-crimson ring with one brighter knot where a filament arm crosses it at roughly 10 o'clock, seven crimson spiral arms frozen mid-swallow with visible RGB fringing on their inner tips, ultraviolet glaze in the frame corners. Tune the seed constant empirically until the knot sits off-axis — the still must read as a paused photograph of a swallow, never a symmetric mandala. Fully legible at 128px: black dot, hot ring, red spiral.",
+      "gpuCost": {
+        "estimate": "moderate — ~11 value-noise evaluations per pixel (3 warp + 4 main ridged + 2+2 fringe), plus 1 atan, 1 log, 2 exp, ~8 smoothstep/mix; ≈1.1–1.4x the current abyss.ts (which already does 10 noise calls via fbm(q*3 + fbm(q*1.5))) — comfortably inside the ≤2x budget",
+        "notes": "Constant loop bounds throughout; no texture fetches, no branches, no extra passes. If a vec2 warp (two fbm3 calls, 14 noise total) is preferred for richer filaments, it still fits the budget; the scalar-warp version (11) is the guaranteed-safe floor. The atan/log singularity sits permanently inside the black core mask, so no precision artefacts are ever visible. The 2-octave fringe fbms deliberately under-resolve — fringing only needs low-frequency structure to read as colour separation."
+      },
+      "crossfadeNotes": "This is the terminal scene, so it has one neighbour (above, arc ≤0.88) and the blend works in its favour: The Throat is luminance-sparse — mostly near-black with chroma confined to the thin ring and filament tips — and linear opacity blending against near-black is benign. Mid-fade reads as the neighbour's light dimming while a crimson ring materialises around a growing darkness: literally 'the throat opening beneath you', no mud, no grey soup. Two cautions: enter with darkness already ≈0.8 at arc 0.88 so the ring exists from the first second of the 8s fade (the ring is the thumbnail identity — it should be the first thing to appear); and because each scene runs its own composer (per §18.2 overlapping canvases), our bloom only halos our own ring — the neighbour's brights won't bleed into our void.",
+      "risks": "(1) Bloom bleed into the void: at bloomStrength 1.15 the ring's halo can creep inside the core and break 'absolute black' — cap ring brightness ≈1.6 pre-bloom, and if the halo still crosses, raise threshold to ~0.7 or drop radius to 0.45 rather than dimming the ring. (2) Banding in the near-black violet gradients on OLED — the luma-scaled grain at 0.16 doubles as dither; do not set grain below ~0.1 for this scene. (3) Fringe mismatch: the 2-octave R/B samples won't perfectly track the 4-octave G ridges; clamp the offset (ca*14 ≤ ~0.35 in q-space) or the fringe degrades into colour noise. (4) Moiré at the outer rim from differential rotation at high depth-port values — cap twist (≤3.8) and keep 7 arms fixed. (5) The t=0 seed needs empirical tuning per the final noise constants; budget a few minutes of eyeballing. (6) During the studio's live darkness scrubbing the core radius change is large — the pow(d,1.35) curve keeps it slow early, but verify it doesn't pop at the 0.88 crossfade boundary."
+    }
+  ],
+  "judgeReports": [
+    {
+      "lens": "Mutual distinctiveness only: all 21 pairs scored on dominant hue family, compositional geometry, motion verb, and luminance key, with a 128px-thumbnail confusability test and an identity-sentence legibility check. Audio behaviour, GPU cost and crossfade craft were ignored except where they bear on visual identity.",
+      "overall": "The set is far better than 'bland' — the motion axis is fully partitioned (shimmer / rise / shear / fall / pulse / stillness / rotation: seven distinct verbs, the strongest axis in the submission), and every identity sentence except twilight's whale clause is a concrete, thumbnail-legible picture rather than a mood statement. The old fbm-fog-wash look is genuinely dead everywhere except thermocline's warm half, which needs taming, not redesign. But distinctiveness fails in two places. First, the predicted bright-aqua collision is real: surface and sunlitShallows share both a dominant blue-green hue family and a top-centre-sun radial geometry, and their docs both claim gold ownership in so many words — at 128px they are two variations of 'warm light radiating from top-centre over teal'. Second, in the dark half of the descent (twilight/midnight/abyssal/descent — inevitably key-compressed by the narrative) differentiation must come from accent structure, and the expanding-sonar-ring event is spent three times (midnight, abyssal, descent), twice on adjacent scenes with near-identical periods; the vast-silhouette motif is also spent twice (twilight, abyssal). Verdicts: 4 pass (surface, thermocline, abyssal, descent — the last three with parameter-level trims), 3 revise (sunlitShallows high, midnight high, twilight medium). With the seven required changes applied, every pair separates on at least two of the four axes and each scene owns exactly one hue family, one geometry, one motion verb and one signature event: lattice-dome / diagonal green fan / horizontal blade / cone-and-snow / constellation / black wedge / vortex. That lineup would survive any thumbnail grid.",
+      "requiredChanges": [
+        {
+          "sceneId": "sunlitShallows",
+          "change": "Break the schema shared with surface, not just the texture: move the fan anchor decisively off the top-centre axis (sun displaced toward an upper corner so the rays cut the frame diagonally), and cede gold to surface — shift the beam body from sand-gold #D6C98F toward green-glass chartreuse, re-tint the mote glints green-biased, and delete the contradictory 'gold is this scene's and nobody else's' claim from the palette description. After the change the pair separates as: top-centre white-gold lattice dome vs corner-anchored green diagonal fan.",
+          "severity": "high"
+        },
+        {
+          "sceneId": "midnight",
+          "change": "Remove the expanding jelly-bell sonar rings entirely — abyssal owns the expanding-ring event and is adjacent. Replace the ~9s heartbeat with a non-annular event (e.g. a chain-flare that propagates mote-to-mote along the diagonal drift line, or a single mote burst with radiating filaments), update the identity sentence and the t=0 still description accordingly. This also drops the set-wide ring-on-black count from three scenes to two maximally different ones.",
+          "severity": "high"
+        },
+        {
+          "sceneId": "twilight",
+          "change": "Demote the leviathans: cut to one distant beast at most, keep it below thumbnail salience by design intent (it already is by contrast maths), and rewrite the identity sentence to lead with what the thumbnail actually shows — pale violet cone + falling snow — moving the silhouette to a subordinate clause or out of the sentence. Abyssal must be the first time the descent meets a vast presence.",
+          "severity": "medium"
+        },
+        {
+          "sceneId": "abyssal",
+          "change": "Guard the entry state against the horizon-read: raise entry mass occupancy so the silhouette owns ≥60% of frame from the first second (lift the 0.36 profile base) and/or steepen the world tilt from ~12° toward 18–22°, so the 128px read is always 'black wedge with a crack of water', never 'horizontal horizon line' — thermocline owns the horizontal division.",
+          "severity": "medium"
+        },
+        {
+          "sceneId": "descent",
+          "change": "Cap the violet: clamp the late-arc cool-to-ultraviolet drift (band*0.45*uDark term) and the field's violet-black bias so the scene reads crimson-dominant at every arc position — twilight owns violet, and the two designs' ownership claims currently contradict each other in writing. Keep #5d2bd4 strictly as rim glaze. Also correct the false 'only polar/centripetal composition' claim to 'the radial inverse of surface' so the sun/anti-sun bookend is preserved deliberately.",
+          "severity": "medium"
+        },
+        {
+          "sceneId": "thermocline",
+          "change": "De-fog the warm half: the upper field is a literal fbm3 haze wash — the last residue of the old soft-fbm-fog look. Keep its amplitude minimal and bias the texture toward graded horizontal banding (sky-like stratification) rather than isotropic noise, so the half reads as a dying graded sky, not a fog wash.",
+          "severity": "low"
+        },
+        {
+          "sceneId": "surface",
+          "change": "Lock exclusivity once shallows cedes gold: state white-gold as surface-only in the palette description, and keep the aqua water-toned (milky, non-emissive) so it never approaches midnight's saturated electric cyan.",
+          "severity": "low"
+        }
+      ],
+      "pairwiseIssues": [
+        {
+          "a": "surface",
+          "b": "sunlitShallows",
+          "axis": "hue + geometry",
+          "why": "Both are radial compositions anchored on a sun at/above top-centre rendering gold-family light over turquoise/teal water — the exact 'two bright aqua scenes' failure mode. Both palettes claim gold as owned (#FFE8A8 caustic gold vs #D6C98F/#EDE6C4 'gold is this scene's and nobody else's' — mutually contradictory). At 128px both thumbnails read 'warm glow radiating from top-centre over blue-green'. Distinct motion (shimmer vs rise) and key (high vs bimodal) do not rescue a shared dominant-hue + shared-geometry pair.",
+          "severity": "high"
+        },
+        {
+          "a": "midnight",
+          "b": "abyssal",
+          "axis": "motion/geometry (signature event) + luminance",
+          "why": "Both scenes stake their single kinetic event on a slowly expanding sonar-like ring over a near-black field — midnight's identity sentence says 'expanding like slow sonar', abyssal's says 'one pale sonar ring'. Both rings are phase-offset to be present in the t=0 still, and the scenes are adjacent, so the crossfade composites two expanding rings. Same event, same key, back to back: a viewer flicking thumbnails sees 'dark frame with a ring' twice.",
+          "severity": "high"
+        },
+        {
+          "a": "twilight",
+          "b": "abyssal",
+          "axis": "geometry (iconography)",
+          "why": "Two of seven identity sentences feature 'an enormous dark silhouette' of a vast sea presence. Twilight's whales are background garnish; abyssal's flank IS the scene. The duplication dilutes abyssal's core concept ('the descent becomes company') and twilight's clause over-claims — its beasts are designed sub-thumbnail-visible. Not confusable at 128px (the beam dominates twilight), but a real identity collision in the set's vocabulary.",
+          "severity": "medium"
+        },
+        {
+          "a": "sunlitShallows",
+          "b": "twilight",
+          "axis": "geometry + motion device",
+          "why": "Identical schema: light wedge(s) descending from top-centre, particles that flare as they cross the beam (motes/bells vs snow/strings — even the audio-flare bond is the same trick), dark floor below. Hue (green-gold vs violet) and key (mid-high vs low) carry all the separation; on the geometry axis they are the same picture with different particle direction. Weakened, not failed.",
+          "severity": "medium"
+        },
+        {
+          "a": "thermocline",
+          "b": "abyssal",
+          "axis": "geometry",
+          "why": "Both are single-boundary compositions: lighter field above, dark field below, one thin pale seam between. The only geometric separator is abyssal's ~12° tilt — and at scene entry abyssal's mass sits near ~50% occupancy, while thermocline's late-arc state (line risen to 0.74, dim sliver above dark field) converges on the same wedge-and-sliver read. Hue (amber/indigo vs achromatic) and key separate them, but the 'horizon line' geometry is shared.",
+          "severity": "medium"
+        },
+        {
+          "a": "midnight",
+          "b": "descent",
+          "axis": "luminance key + ring motif",
+          "why": "Both ~95% black with saturated glow accents and a glowing ring present in the still (cyan scalloped wavefront vs crimson horizon ring). Complementary hues (cyan/green vs crimson) make 128px confusion unlikely, but the dark-field-plus-ring schema appearing in three of seven scenes is exactly the kind of repetition the mandate targets.",
+          "severity": "medium"
+        },
+        {
+          "a": "twilight",
+          "b": "descent",
+          "axis": "hue",
+          "why": "Twilight 'OWNS violet'; descent's background is 'deliberately violet-black', its rim is ultraviolet #5d2bd4, and its arc response cools the filament body 'from crimson toward ultraviolet' — so descent becomes violet-forward precisely at its deep end, two scenes after the violet scene. Descent's own palette note forbidding other scenes violet directly contradicts twilight's ownership claim. Crimson dominance saves the thumbnail today; the late-arc drift erodes it.",
+          "severity": "medium"
+        },
+        {
+          "a": "thermocline",
+          "b": "twilight",
+          "axis": "hue",
+          "why": "Steel-indigo (#35466B, claimed owned) vs violet-indigo (#241F3D/#8C7DC7, claimed owned) are adjacent families held apart only by twilight's green-channel-lowest rule and thermocline's grey bias — both designs flag tone-mapping drift as a risk, and if either drifts they meet in the middle. Geometry, motion and key are all distinct, so low.",
+          "severity": "low"
+        },
+        {
+          "a": "abyssal",
+          "b": "descent",
+          "axis": "luminance + ring motif",
+          "why": "Both near-black frames whose only bright element is a thin annular event (pale sage arc grazing a diagonal contour vs complete centred crimson ring). Hue (achromatic vs red) and centring separate them; acceptable once midnight's ring is removed and the set's ring count drops from three to two maximally-different instances.",
+          "severity": "low"
+        },
+        {
+          "a": "surface",
+          "b": "midnight",
+          "axis": "hue",
+          "why": "Aqua #29C4CF and electric cyan #19F5E1 are the same family at different chroma/key. Opposite luminance keys (high-key field vs points on void) make confusion impossible, but surface must stay milky/water-toned and never emissive-saturated, or midnight's 'only saturated emissives' ownership erodes.",
+          "severity": "low"
+        },
+        {
+          "a": "surface",
+          "b": "descent",
+          "axis": "geometry",
+          "why": "Both radial, disc-centred compositions — descent's 'only polar/centripetal composition' claim is simply false. Visually it is a perfect inversion (white-gold sun emitting vs black core swallowing, ring of light that cannot escape) and arguably a deliberate bookend, so no thumbnail risk — but the prose claim should be corrected so the inversion is maintained knowingly rather than assumed.",
+          "severity": "low"
+        },
+        {
+          "a": "sunlitShallows",
+          "b": "abyssal",
+          "axis": "hue",
+          "why": "Both green-family: saturated green-gold vs near-achromatic grey-green. Chroma poles keep them apart, but abyssal's identity is explicitly 'the absence of chroma' and depends (per its own risks) on all six neighbours staying chromatic — shallows' dim gaps must stay teal, never grey out.",
+          "severity": "low"
+        },
+        {
+          "a": "thermocline",
+          "b": "descent",
+          "axis": "technique-as-identity (chromatic fringe)",
+          "why": "RGB dispersion is the named identity of thermocline ('Prism Horizon', RGB-fringed blade and striations) and reappears as descent's radial chromatic aberration. Linear vs radial fringing on opposite hue families won't confuse a thumbnail, but the same optical signature is spent twice; keep descent's fringing subordinate (it is, currently) and never let it near the blade's prominence.",
+          "severity": "low"
+        }
+      ]
+    },
+    {
+      "lens": "Creative-director cohesion review: the seven scenes judged as one continuous descent (luminance/weight arc, hinge integrity, music fit, arcResponse depth, crossfade legibility, BoC/AWVFTS/Cocteau register)",
+      "overall": "Judged as one work, this set genuinely coheres — it is well past 'seven nice shaders' and most of the way to a single composed descent. The strongest unifying device is the light-collapse through-line: a whole sky of caustics becomes a fan of rays, then one hard blade, then a single cone, then living points, then an echo on a contour, then one ring that cannot escape. Luminance falls monotonically-ish in the mean (the only deliberate exception is midnight's bloomed cores), weight grows on schedule (water as architecture -> column -> mass -> void), and the thermocline is a true hinge, not just a midpoint — the only hard line in the piece, with warmth dying above it and the composition inverting across its residency. Hue ownership is disciplined and mostly honoured (gold / green-gold / amber-steel / violet / cyan-green / achromatic / crimson), and every single arcResponse deepens structurally rather than dimming — sun sinking, clerestories closing, cold claiming the frame, the cone retracting, the shoal dying out, the mass claiming the frame, the void dilating. Music fit is frequently literal in the best way: bells get glints, the refract pad bends the image, the leviathan breathes a mass, the void choir gets a warm-ringed tunnel. The crossfade thinking is unusually mutual — neighbours plan for each other's frames. Two issues rise above tuning notes, both around midnight: (1) the register risk — the piece's most saturated emissives, strongest bloom, and lowest grain land exactly at the violet boundary where the descent should be at its most faded, the one moment the work could snap from hauntological to synthwave; (2) the expanding-ring motif is duplicated across the adjacent midnight/abyssal pair and needs staging as a handoff rather than a duet. Lesser items: the twilight/descent violet-ownership contradiction in the colour ledger, the blade-over-cone crossfade geometry, and presence ceilings on twilight's ghost beasts. Nothing here requires a redesign; midnight needs a tuning pass, the rest need verification stills. Within the BoC/AWVFTS/Cocteau register, six of seven scenes are squarely on voice; midnight is recoverable with chroma and grain discipline, and descent's event-horizon vocabulary stays on the right side of sci-fi as long as the throat/maelstrom framing wins in the render.",
+      "requiredChanges": [
+        {
+          "sceneId": "midnight",
+          "change": "Re-tune the register toward biological, away from neon: flatten or reverse the arc-tint curve so motes enter the scene (at the twilight boundary) already partly desaturated/bio-green and reach peak electric only mid-residency; cap core chroma slightly (lean the cyan toward #0B4A52 at the bloomed edge); raise grainIntensity from 0.06 toward ~0.10 so the void keeps tape texture; keep the 110ms flicker sparks at subtle gain so the fastest event in the dark half doesn't undercut the descending stillness gradient.",
+          "severity": "medium"
+        },
+        {
+          "sceneId": "midnight",
+          "change": "Strengthen ring suppression near darkness 0.74 (deepen the (1-0.55*dark) envelope toward full extinction at the boundary) so the expanding-ring motif hands off cleanly to abyssal's sonar wavefront instead of duetting with it during the crossfade.",
+          "severity": "medium"
+        },
+        {
+          "sceneId": "descent",
+          "change": "Amend the hue-ownership claim to crimson only — twilight already owns violet — and enforce it in the render: keep #5d2bd4 strictly as outer-rim glaze and horizon haze, never field-dominant, and verify late-arc thumbnails read crimson-led rather than violet. Separately, guard the 'throat/maelstrom' read over 'black hole': keep the ring pink-crimson (never white-hot), keep the heavy grain, and let the filament warp stay organic so the seven arms never resolve into a tidy accretion disc.",
+          "severity": "low"
+        },
+        {
+          "sceneId": "thermocline",
+          "change": "In the last ~10% of the residency window, ease the blade's additive gain (or let its bloom halo soften) and verify the 50% overlay against twilight's cone — the hard horizontal must read as a dying horizon seen from below, not a glitch scanline crossing the violet beam.",
+          "severity": "low"
+        },
+        {
+          "sceneId": "twilight",
+          "change": "Clamp the fft.low -> field.presence route's ceiling (and bias it lower near the scene's entry/exit arcs) so the crossing silhouettes never solidify beyond ghost-faint — they must foreshadow abyssal's mass, not spend it.",
+          "severity": "low"
+        },
+        {
+          "sceneId": "sunlitShallows",
+          "change": "Validate surface's stated cool-neighbour constraint with an actual 50% overlaid still of the two scenes at the boundary arc; if the green-gold beams grey the mid-fade, hold beam gain modest during the fade (as already planned for mote glint) and let the teal gaps carry the blend.",
+          "severity": "low"
+        }
+      ],
+      "pairwiseIssues": [
+        {
+          "a": "twilight",
+          "b": "midnight",
+          "axis": "register / luminance-saturation continuity at the crossfade",
+          "why": "This is the one place the descent gets brighter and more saturated as it goes down. Twilight exits as faded violet-grey near-black; midnight enters with the piece's only fully saturated emissives at peak electric tint (the arc-tint shift toward colder/deeper hues only engages LATER in midnight's residency, so the motes are most neon exactly at the violet boundary) under the set's strongest bloom (1.6 / 0.15). Diegetically defensible — bioluminescence is the last light — but tonally it risks snapping from AWVFTS to synthwave for the 8s of the fade. Flatten or reverse the tint curve so motes enter part-desaturated/biological and reach full electric only mid-residency.",
+          "severity": "medium"
+        },
+        {
+          "a": "midnight",
+          "b": "abyssal",
+          "axis": "motif duplication — expanding ring wavefronts in adjacent scenes",
+          "why": "Midnight's scalloped jelly ring (~9s cycle) and abyssal's sonar wavefront (~11s cycle) are the same visual event twice in a row, and abyssal stakes its identity on the ring being 'the only event'. During the crossfade both can be live simultaneously — two unrelated expanding circles mid-frame reads as repetition, not echo. Midnight's darkness gating (env x(1-0.55*dark)) leaves ~45% ring energy at the 0.74 boundary — not enough suppression. Stage it as a handoff: the living ring dies out fully before the vast echo takes the motif over.",
+          "severity": "medium"
+        },
+        {
+          "a": "twilight",
+          "b": "descent",
+          "axis": "hue-ownership ledger contradiction",
+          "why": "Twilight declares 'the scene OWNS violet' (heliotrope #8C7DC7 dominant); descent declares 'no other scene may use crimson or violet as a dominant' and runs a black-violet field with ultraviolet #5d2bd4 glaze. Non-adjacent, so no crossfade risk, and the actual hues differ (grey-heliotrope vs electric blue-violet) — but the set's organising system is exclusive hue ownership, and two scenes currently claim the same family on paper. Resolve the ledger: descent's claim should be 'crimson only', with UV confined to rim glaze, or twilight shifts its declared family to indigo.",
+          "severity": "medium"
+        },
+        {
+          "a": "thermocline",
+          "b": "twilight",
+          "axis": "crossfade geometry — hard horizontal over soft vertical",
+          "why": "The set's only hard line (the blade, risen to y~0.74 and bloom-haloed, deliberately 'the last thing to stay legible at 50%') dissolves across twilight's soft vertical cone — the blade slices straight through the cone's bright body at mid-fade. It can read beautifully as 'the horizon seen from below', or it can scan as a glitch scanline across the violet beam. Both designs gesture at this but neither owns it: verify the 50% overlay of the two stills and ease blade gain in the last ~10% of thermocline's residency if needed.",
+          "severity": "low"
+        },
+        {
+          "a": "twilight",
+          "b": "abyssal",
+          "axis": "device repetition — vast creature silhouettes",
+          "why": "Twilight's crossing whale-dark beasts pre-figure abyssal's frame-filling mass. Read as escalation (glimpse -> company), this is one of the set's best long-range rhymes — but only if twilight's silhouettes stay ghost-faint. The fft.low->presence route can push them toward 'unmistakable' on a heavy strings passage, which would spend abyssal's reveal two scenes early. Cap presence, especially near twilight's boundaries.",
+          "severity": "low"
+        },
+        {
+          "a": "surface",
+          "b": "sunlitShallows",
+          "axis": "crossfade hue — surface's own cool-neighbour requirement",
+          "why": "Surface's crossfade notes explicitly warn that a warm-dominant neighbour would grey the mid-fade; shallows' dominant is warm green-gold. The shared cool teal floor (#0B5E6E family vs #073036) and the fact both warms are gold-family (gold-over-gold doesn't grey) almost certainly rescue it, but this is a stated constraint the next design half-violates — confirm with an overlaid mid-fade still rather than assuming.",
+          "severity": "low"
+        }
+      ]
+    }
+  ]
+}
