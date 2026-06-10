@@ -41,6 +41,7 @@ export class Engine {
   private host: VisualHost | null = null;
   private active: SceneInstance | null = null;
   private masterBus: Tone.Gain | null = null;
+  private hostLimiter: Tone.Limiter | null = null;
   private gesture: GestureController | null = null;
   private matrix: Matrix | null = null;
   private routes: ModulationRoute[];
@@ -308,10 +309,13 @@ export class Engine {
       return;
     }
     await unlockAudio();
-    // The host owns the shared master bus; each scene feeds it through its own gain,
-    // so two scenes can be summed and crossfaded (§18.2).
+    // The host owns the shared master bus and the single brick-wall limiter. Each scene
+    // feeds the bus through its own gain so two scenes can be summed during a crossfade
+    // (§18.2) without ever exceeding FS — the limiter sits at the very end of the chain.
     this.masterBus = new Tone.Gain(1);
-    this.masterBus.connect(Tone.getDestination());
+    this.hostLimiter = new Tone.Limiter(-1);
+    this.masterBus.connect(this.hostLimiter);
+    this.hostLimiter.connect(Tone.getDestination());
     this.active ??= this.makeScene(this.activeIndex, this.registry);
     await this.active.build(); // builds the scene's audio + registers its ports
     this.active.output?.connect(this.masterBus); // scene → shared master → speakers
@@ -456,6 +460,7 @@ export class Engine {
     this.matrix?.dispose();
     this.active?.dispose();
     this.incoming?.dispose();
+    this.hostLimiter?.dispose();
     this.masterBus?.dispose();
     this.gesture?.dispose();
     this.host?.dispose();

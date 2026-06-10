@@ -10,6 +10,7 @@ import { Analysers } from './analysers';
 import { Composer } from './composer/composer';
 import { TapeWarmth } from './effects/tapeWarmth';
 import { generateHallIR } from './effects/hallIR';
+import { smoothWrite } from './smoothWrite';
 
 function nodeParams(patch: Patch, id: string): Record<string, Scalar> {
   return patch.audioGraph.nodes.find((n) => n.id === id)?.params ?? {};
@@ -38,7 +39,6 @@ export class AudioEngine {
   private drift: Tone.Vibrato | null = null;
   private padDry: Tone.Gain | null = null;
   private glue: Tone.Compressor | null = null;
-  private limiter: Tone.Limiter | null = null;
   private shimmer: Tone.PitchShift | null = null;
   private shimmerReverb: Tone.Reverb | null = null;
   private shimmerOut: Tone.Gain | null = null;
@@ -144,10 +144,9 @@ export class AudioEngine {
     this.bass.output.connect(this.dryBus);
     this.dryBus.connect(this.master);
 
-    // Master spine: gentle glue compression for cohesion, then a brick-wall limiter as a
-    // safe ceiling (nothing else caps peaks). One scene plays today, so this per-scene
-    // master IS the final master; when crossfades land (§18.2) the limiter moves to the
-    // host's shared master bus so two summed scenes can't exceed it.
+    // Per-scene glue compression for cohesion. The brick-wall limiter lives on the HOST
+    // master bus (Engine.masterBus → hostLimiter → Destination) so two summed scenes
+    // during a crossfade can never push the final output over FS.
     const glueParams = nodeParams(this.patch, 'glue');
     this.glue = new Tone.Compressor({
       threshold: num(glueParams.threshold, -18),
@@ -156,9 +155,7 @@ export class AudioEngine {
       release: num(glueParams.release, 0.25),
       knee: 8,
     });
-    this.limiter = new Tone.Limiter(num(nodeParams(this.patch, 'limiter').threshold, -1));
     this.master.connect(this.glue);
-    this.glue.connect(this.limiter);
 
     // Analyser taps sit on the PRE-glue master, so audio→visual modulation tracks the
     // mix itself rather than the limiter's gain reduction.
@@ -193,9 +190,7 @@ export class AudioEngine {
       base: this.master.gain.value,
       min: 0,
       max: 1.5,
-      write: (v) => {
-        this.master.gain.value = clamp(v, 0, 1.5);
-      },
+      write: (v) => { smoothWrite(this.master.gain, clamp(v, 0, 1.5)); },
       audioTarget: this.master.gain,
     });
 
@@ -206,9 +201,7 @@ export class AudioEngine {
         base: padDry.gain.value,
         min: 0,
         max: 1.5,
-        write: (v) => {
-          padDry.gain.value = clamp(v, 0, 1.5);
-        },
+        write: (v) => { smoothWrite(padDry.gain, clamp(v, 0, 1.5)); },
         audioTarget: padDry.gain,
       });
     }
@@ -219,9 +212,7 @@ export class AudioEngine {
         base: num(nodeParams(this.patch, 'reverbHP').frequency, 280),
         min: 20,
         max: 2000,
-        write: (v) => {
-          hp.frequency.value = clamp(v, 20, 2000);
-        },
+        write: (v) => { smoothWrite(hp.frequency, clamp(v, 20, 2000)); },
         audioTarget: hp.frequency,
       });
     }
@@ -233,9 +224,7 @@ export class AudioEngine {
         base: shimmerOut.gain.value,
         min: 0,
         max: 1.5,
-        write: (v) => {
-          shimmerOut.gain.value = clamp(v, 0, 1.5);
-        },
+        write: (v) => { smoothWrite(shimmerOut.gain, clamp(v, 0, 1.5)); },
         audioTarget: shimmerOut.gain,
       });
     }
@@ -246,9 +235,7 @@ export class AudioEngine {
         base: shimmer.feedback.value,
         min: 0,
         max: 0.9,
-        write: (v) => {
-          shimmer.feedback.value = clamp(v, 0, 0.9);
-        },
+        write: (v) => { smoothWrite(shimmer.feedback, clamp(v, 0, 0.9)); },
         audioTarget: shimmer.feedback,
       });
     }
@@ -298,9 +285,7 @@ export class AudioEngine {
         base: drift.depth.value,
         min: 0,
         max: 1,
-        write: (v) => {
-          drift.depth.value = clamp(v, 0, 1);
-        },
+        write: (v) => { smoothWrite(drift.depth, clamp(v, 0, 1)); },
         audioTarget: drift.depth,
       });
     }
@@ -329,10 +314,11 @@ export class AudioEngine {
     this.composer.density = m.density;
   }
 
-  /** The scene's mixed audio output (post glue + limiter) — the host routes this into
-   *  the shared master. Falls back to the raw master before build() wires the spine. */
+  /** The scene's mixed audio output (post glue) — the host routes this into the shared
+   *  master bus which carries the host-level limiter. Falls back to the raw master
+   *  before build() wires the spine. */
   get output(): Tone.ToneAudioNode {
-    return this.limiter ?? this.master;
+    return this.glue ?? this.master;
   }
 
   dispose(): void {
@@ -351,7 +337,6 @@ export class AudioEngine {
     this.shimmerOut?.dispose();
     this.padDry?.dispose();
     this.glue?.dispose();
-    this.limiter?.dispose();
     this.wetBus.dispose();
     this.dryBus.dispose();
     this.master.dispose();

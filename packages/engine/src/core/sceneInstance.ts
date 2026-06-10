@@ -69,10 +69,11 @@ export class SceneInstance {
     this.audio?.tickFeatures(dt);
   }
 
-  /** Set this scene's audio level instantly (0..1). The host ramps it per frame to
-   *  cross-fade against another scene (§18.2). No-op before build(). */
+  /** Ramp this scene's audio level to `v` (0..1) over one frame (~16 ms). The per-frame
+   *  call from advanceCrossfade means each step is smooth; the short ramp de-zippers the
+   *  gain write so there is no click even at dropped frames. No-op before build(). */
   setLevel(v: number): void {
-    if (this.sceneGain) this.sceneGain.gain.value = v;
+    if (this.sceneGain) this.sceneGain.gain.rampTo(v, 0.016);
   }
 
   dispose(): void {
