@@ -8,6 +8,7 @@ import {
   type VisualModuleDescriptor,
 } from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+import { glslCommon, glslVertex } from './glsl/common';
 
 export const descriptor: VisualModuleDescriptor = {
   id: 'asendorf',
@@ -24,13 +25,7 @@ export const descriptor: VisualModuleDescriptor = {
   ],
 };
 
-const vertexShader = /* glsl */ `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
+const vertexShader = glslVertex;
 
 // Sort — pixel sorting as a conscious aesthetic (Kim Asendorf lineage): a
 // synthetic colour field, posterised because it was never photography, with
@@ -42,19 +37,11 @@ const vertexShader = /* glsl */ `
 // floor while the sort takes everything, until only long dark falls remain.
 const fragmentShader = /* glsl */ `
   precision highp float;
+  ${glslCommon}
   uniform float uTime;
   uniform vec2 uResolution;
   uniform float uFog, uFlow, uDepth, uDark, uThreshold, uGlitch;
   varying vec2 vUv;
-
-  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
-  float noise(vec2 p){
-    vec2 i = floor(p), f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    float a = hash(i), b = hash(i + vec2(1.0, 0.0));
-    float c = hash(i + vec2(0.0, 1.0)), d = hash(i + vec2(1.0, 1.0));
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-  }
 
   // the picture that was never a photograph — a risograph ink set, not a rainbow:
   // the old cosine phase becomes a folded scalar walked through five banded inks

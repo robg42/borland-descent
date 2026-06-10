@@ -8,6 +8,7 @@ import {
   type VisualModuleDescriptor,
 } from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+import { glslCommon, glslVertex } from './glsl/common';
 
 export const descriptor: VisualModuleDescriptor = {
   id: 'henke',
@@ -24,13 +25,7 @@ export const descriptor: VisualModuleDescriptor = {
   ],
 };
 
-const vertexShader = /* glsl */ `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
+const vertexShader = glslVertex;
 
 // Lumière — the laser figure (Robert Henke lineage): not projection, light as a
 // blade. One closed figure drawn as eight razor segments through a lobed curve,
@@ -41,12 +36,11 @@ const vertexShader = /* glsl */ `
 // it — by the deep end one thin line turns alone in the smoke.
 const fragmentShader = /* glsl */ `
   precision highp float;
+  ${glslCommon}
   uniform float uTime;
   uniform vec2 uResolution;
   uniform float uFog, uFlow, uDepth, uDark, uHaze, uStrike;
   varying vec2 vUv;
-
-  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
 
   vec2 figureVert(float s, float t, float lobes, float aLobe, float r0, float spin, float dark){
     float ang = s * 6.2831 + spin;

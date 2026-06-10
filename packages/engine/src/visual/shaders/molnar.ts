@@ -8,6 +8,7 @@ import {
   type VisualModuleDescriptor,
 } from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+import { glslCommon, glslVertex } from './glsl/common';
 
 export const descriptor: VisualModuleDescriptor = {
   id: 'molnar',
@@ -24,13 +25,7 @@ export const descriptor: VisualModuleDescriptor = {
   ],
 };
 
-const vertexShader = /* glsl */ `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
+const vertexShader = glslVertex;
 
 // Ordres — the plotter grid (Vera Molnár lineage, with a nod to Nees's Schotter):
 // a survey of nested square outlines, one per cell, drawn in a single pen weight.
@@ -42,16 +37,12 @@ const vertexShader = /* glsl */ `
 // survivors' disorder — the grid forgets itself on the way down.
 const fragmentShader = /* glsl */ `
   precision highp float;
+  ${glslCommon}
   uniform float uTime;
   uniform vec2 uResolution;
   uniform float uFog, uFlow, uDepth, uDark, uDisorder, uShake;
   varying vec2 vUv;
 
-  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
-  vec2 hash2(vec2 p){
-    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
-    return fract(sin(p) * 43758.5453);
-  }
   vec2 rot(vec2 p, float a){ float c = cos(a), s = sin(a); return vec2(c * p.x - s * p.y, s * p.x + c * p.y); }
 
   void main(){

@@ -8,6 +8,7 @@ import {
   type VisualModuleDescriptor,
 } from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+import { glslCommon, glslVertex } from './glsl/common';
 
 export const descriptor: VisualModuleDescriptor = {
   id: 'abyssalPlain',
@@ -24,13 +25,7 @@ export const descriptor: VisualModuleDescriptor = {
   ],
 };
 
-const vertexShader = /* glsl */ `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
+const vertexShader = glslVertex;
 
 // Leviathan's Flank: one enormous black ridged silhouette owns the frame on a ~20°
 // tilt, against a thin seam of exhausted grey-green water — the negative-space scene,
@@ -41,20 +36,12 @@ const vertexShader = /* glsl */ `
 // breath. Near-achromatic, matte, glacial — the stillest scene in the set.
 const fragmentShader = /* glsl */ `
   precision highp float;
+  ${glslCommon}
   uniform float uTime;
   uniform vec2 uResolution;
   uniform float uFog, uFlow, uDepth, uDark;
   uniform float uPulse, uSonar;
   varying vec2 vUv;
-
-  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
-  float noise(vec2 p){
-    vec2 i = floor(p), f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    float a = hash(i), b = hash(i + vec2(1.0, 0.0));
-    float c = hash(i + vec2(0.0, 1.0)), d = hash(i + vec2(1.0, 1.0));
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-  }
 
   // Fold a noise value into a sharp crease — ridges, not the usual soft fbm billows.
   float ridge(float n){ float r = 1.0 - abs(2.0 * n - 1.0); return r * r; }
@@ -78,12 +65,6 @@ const fragmentShader = /* glsl */ `
   float ridged2D(vec2 p){
     float v = 0.0, a = 0.5;
     for (int i = 0; i < 4; i++){ v += a * ridge(noise(p)); p = p * 2.07 + 11.3; a *= 0.5; }
-    return v;
-  }
-
-  float fbm3(vec2 p){
-    float v = 0.0, a = 0.5;
-    for (int i = 0; i < 3; i++){ v += a * noise(p); p *= 2.02; a *= 0.5; }
     return v;
   }
 

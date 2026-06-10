@@ -8,6 +8,7 @@ import {
   type VisualModuleDescriptor,
 } from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+import { glslCommon, glslVertex } from './glsl/common';
 
 export const descriptor: VisualModuleDescriptor = {
   id: 'hobbs',
@@ -24,13 +25,7 @@ export const descriptor: VisualModuleDescriptor = {
   ],
 };
 
-const vertexShader = /* glsl */ `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
+const vertexShader = glslVertex;
 
 // Fidenza — the flow field (Tyler Hobbs lineage): inked strokes of irregular
 // length riding one master heading, the whole canvas bent by a slow vector
@@ -41,31 +36,11 @@ const vertexShader = /* glsl */ `
 // away until the ground shows through.
 const fragmentShader = /* glsl */ `
   precision highp float;
+  ${glslCommon}
   uniform float uTime;
   uniform vec2 uResolution;
   uniform float uFog, uFlow, uDepth, uDark, uTurbulence, uRipple;
   varying vec2 vUv;
-
-  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
-  float noise(vec2 p){
-    vec2 i = floor(p), f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    float a = hash(i), b = hash(i + vec2(1.0, 0.0));
-    float c = hash(i + vec2(0.0, 1.0)), d = hash(i + vec2(1.0, 1.0));
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-  }
-  float fbm(vec2 p){ return 0.6 * noise(p) + 0.4 * noise(p * 2.13 + 7.7); }
-
-  // the Fidenza inks, darkened for the descent (linear)
-  vec3 palette(float h){
-    vec3 c = vec3(0.70, 0.63, 0.48);                    // bone
-    c = mix(c, vec3(0.52, 0.16, 0.06), step(0.18, h));  // rust
-    c = mix(c, vec3(0.06, 0.26, 0.30), step(0.38, h));  // deep teal
-    c = mix(c, vec3(0.62, 0.38, 0.08), step(0.56, h));  // amber
-    c = mix(c, vec3(0.10, 0.11, 0.13), step(0.72, h));  // charcoal
-    c = mix(c, vec3(0.24, 0.33, 0.55), step(0.88, h));  // dusk blue
-    return c;
-  }
 
   void main(){
     float aspect = uResolution.x / max(uResolution.y, 1.0);

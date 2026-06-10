@@ -8,6 +8,7 @@ import {
   type VisualModuleDescriptor,
 } from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+import { glslVertex } from './glsl/common';
 
 export const descriptor: VisualModuleDescriptor = {
   id: 'midnightZone',
@@ -22,13 +23,7 @@ export const descriptor: VisualModuleDescriptor = {
   ],
 };
 
-const vertexShader = /* glsl */ `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
+const vertexShader = glslVertex;
 
 // Noctiluca — the midnight zone. At 600 m the only light left is alive: the water
 // is deleted entirely (no field, no gradient, no vignette — ~95% of pixels are pure

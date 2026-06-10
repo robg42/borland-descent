@@ -8,6 +8,7 @@ import {
   type VisualModuleDescriptor,
 } from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+import { glslCommon, glslVertex } from './glsl/common';
 
 export const descriptor: VisualModuleDescriptor = {
   id: 'thermocline',
@@ -22,13 +23,7 @@ export const descriptor: VisualModuleDescriptor = {
   ],
 };
 
-const vertexShader = /* glsl */ `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
+const vertexShader = glslVertex;
 
 // Prism Horizon: ONE hard horizontal blade — the only hard line in the piece — splits
 // a dying amber-grey stratified sky above from steel-indigo isotherm striations below,
@@ -38,24 +33,11 @@ const vertexShader = /* glsl */ `
 // frame: the blade rises 0.45 → 0.74, the warmth ashes out, the lines cool to blue.
 const fragmentShader = /* glsl */ `
   precision highp float;
+  ${glslCommon}
   uniform float uTime;
   uniform vec2 uResolution;
   uniform float uFog, uFlow, uDepth, uRefract, uDisp, uDark;
   varying vec2 vUv;
-
-  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
-  float noise(vec2 p){
-    vec2 i = floor(p), f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    float a = hash(i), b = hash(i + vec2(1.0, 0.0));
-    float c = hash(i + vec2(0.0, 1.0)), d = hash(i + vec2(1.0, 1.0));
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-  }
-  float fbm3(vec2 p){
-    float v = 0.0, a = 0.5;
-    for (int i = 0; i < 3; i++){ v += a * noise(p); p *= 2.03; a *= 0.5; }
-    return v;
-  }
 
   // The optical interface — a function of x only, so the split stays a true horizontal
   // blade. Two incommensurate sines plus low-frequency noise give a slow meniscus

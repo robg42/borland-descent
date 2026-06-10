@@ -8,6 +8,7 @@ import {
   type VisualModuleDescriptor,
 } from '../moduleDescriptor';
 import type { VisualLayer } from './types';
+import { glslCommon, glslVertex } from './glsl/common';
 
 export const descriptor: VisualModuleDescriptor = {
   id: 'abyss',
@@ -22,13 +23,7 @@ export const descriptor: VisualModuleDescriptor = {
   ],
 };
 
-const vertexShader = /* glsl */ `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
+const vertexShader = glslVertex;
 
 // The Throat — the terminal scene, and the only one that looks back at you.
 // An absolutely black core slightly above centre, rimmed by one thin hot
@@ -43,14 +38,13 @@ const vertexShader = /* glsl */ `
 // outer-rim glaze and a thin haze hugging the horizon. No orange anywhere.
 const fragmentShader = /* glsl */ `
   precision highp float;
+  ${glslCommon}
   uniform float uTime;
   uniform vec2 uResolution;
   uniform float uFog, uFlow, uDepth, uDark, uMaw, uGlow;
   varying vec2 vUv;
 
   const float TAU = 6.28318530718;
-
-  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
 
   // Value noise made periodic along x (the angular axis): the atan seam makes
   // q.x jump by exactly one period, so wrapping the lattice there closes the
