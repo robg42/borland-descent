@@ -58,9 +58,10 @@ const fragmentShader = /* glsl */ `
     float v = 0.0;
     float g = 0.0;
 
-    // ---- register one: the infinite planes — dim, slow, architectural ----
+    // ---- register one: the infinite planes — dim, architectural, and visibly
+    // ROTATING on their own clock (independent of the streaks' travel) ----
     vec2 pc = (vUv - 0.5) * vec2(aspect, 1.0);
-    float pAng = t * (0.02 + uFlow * 0.10) + 0.6; // glacial shared rotation
+    float pAng = t * (0.05 + uFlow * 0.22) + 0.6; // a quarter-turn in ~15-30s
     float pS = dot(pc, vec2(cos(pAng), sin(pAng)));
     float pFreq = mix(mix(2.5, 6.0, uDepth), 1.6, uDark * 0.7);
     float pX = pS * pFreq;
@@ -73,9 +74,11 @@ const fragmentShader = /* glsl */ `
     v += pHard * pSeq * 0.4 + pGlow * 0.05 * (0.4 + 0.6 * pSeq); // the dim base layer
     g += pGlow * 0.02;
 
-    // ---- register two: the short streaks running over the planes ----
+    // ---- register two: the short streaks FLOWING across the screen — their
+    // travel clock is unrelated to the planes' rotation, so the two registers
+    // never read as one rigid body ----
     float count = mix(4.0, 7.0, uDepth) * (1.0 - 0.5 * uDark); // the arc strips the rig
-    float travel = 0.04 + uFlow * 0.20;
+    float travel = 0.09 + uFlow * 0.30; // a streak crosses the frame in ~5-10s
     float wBase = mix(0.02, 0.06, uWidth) * (1.0 - 0.35 * uDark);
     // branch-free fixed loop: streaks beyond the count contribute zero via on
     for (int i = 0; i < 7; i++){
