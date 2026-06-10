@@ -7,7 +7,19 @@
 export { Engine } from './core/engine';
 export type { EngineOptions, Disposable } from './core/types';
 export { Transport } from './core/transport';
+export type { TransportClock, TransportState, TransportPosition } from './core/transport';
+export { smoothWrite } from './core/params';
+export type { SmoothableParam } from './core/params';
 export { VisualEngine } from './visual/visualEngine';
+
+// Sequencer contract (Workstream A implements core/scheduler against these)
+export type {
+  SequencerEvent,
+  SequencerNoteEvent,
+  SequencerPortEvent,
+  SequenceWindowContext,
+  EventsInWindow,
+} from './sequencer/types';
 
 // Audio context lifecycle
 export { unlockAudio, resumeAudio, isAudioRunning, audioContextState } from './audio/context';
@@ -25,6 +37,7 @@ export { PatchSchema, validatePatch, safeValidatePatch } from './patch/schema';
 export type { PatchValidation } from './patch/schema';
 export * from './patch/types';
 export { defaultPatch } from './patch/default';
+export { migratePatch, CURRENT_PATCH_VERSION } from './patch/migrate';
 export { JsonPatchStore, parsePatchOrDefault } from './patch/store';
 export type { PatchStore, JsonPatchStoreOptions } from './patch/store';
 

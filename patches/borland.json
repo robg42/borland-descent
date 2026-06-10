@@ -2,7 +2,7 @@
   "meta": {
     "id": "borland",
     "name": "Borland — Surface",
-    "version": 1,
+    "version": 2,
     "createdAt": "2026-06-06T00:00:00.000Z",
     "updatedAt": "2026-06-08T00:00:00.000Z",
     "seed": 20260606
@@ -317,5 +317,6 @@
     { "id": "r5", "source": "masterMeter.level", "target": "bloom.strength", "amount": 0.6, "curve": "linear", "smoothing": 100, "rate": "control", "enabled": true },
     { "id": "r6", "source": "arc.darkness", "target": "drift.depth", "amount": 0.45, "curve": "linear", "smoothing": 400, "rate": "control", "enabled": true },
     { "id": "r7", "source": "arc.darkness", "target": "tape.hiss", "amount": 0.03, "curve": "linear", "smoothing": 400, "rate": "control", "enabled": true }
-  ]
+  ],
+  "sequences": []
 }

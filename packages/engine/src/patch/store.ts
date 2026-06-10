@@ -1,6 +1,7 @@
 import type { Patch } from './types';
 import { safeValidatePatch } from './schema';
 import { defaultPatch } from './default';
+import { migratePatch } from './migrate';
 
 /**
  * Persistence seam (brief §12). v1 ships JsonPatchStore; a reactive backend
@@ -14,9 +15,9 @@ export interface PatchStore {
   subscribe?(onChange: (patch: Patch) => void): () => void;
 }
 
-/** Validate unknown input, falling back to the bundled default (graceful degrade). */
+/** Migrate + validate unknown input, falling back to the bundled default (graceful degrade). */
 export function parsePatchOrDefault(input: unknown): Patch {
-  const result = safeValidatePatch(input);
+  const result = safeValidatePatch(migratePatch(input));
   if (result.success) return result.patch;
   console.warn('[borland] Patch invalid — falling back to bundled default.', result.error);
   return defaultPatch;

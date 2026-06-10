@@ -117,6 +117,49 @@ export const ModulationRouteSchema = z.object({
   enabled: z.boolean().default(true),
 });
 
+// ---- sequences (schema v2) -------------------------------------------------------
+// A sequence is authored state like any route: serialised here, rendered by the
+// engine's sequencer against the shared transport. Notes quantise through the
+// active scene's scale/keyCentre; port tracks write through the same SignalInput
+// path the matrix uses. Steps are plain arrays of small objects — git-diffable.
+export const SequenceStepSchema = z.object({
+  on: z.boolean().default(false),
+  /** Scale degree relative to the scene's scale (notes targets). */
+  degree: z.number().int().optional(),
+  octave: z.number().int().min(-3).max(3).default(0),
+  velocity: unipolar.default(0.8),
+  probability: unipolar.default(1),
+  /** Note length in steps (may exceed 1 to overlap; ties extend the previous note). */
+  lengthSteps: z.number().positive().default(1),
+  ratchet: z.number().int().min(1).max(4).default(1),
+  tie: z.boolean().optional(),
+  /** For port targets: the value this step emits. */
+  value: z.number().optional(),
+});
+export const SequenceTargetSchema = z.discriminatedUnion('kind', [
+  // an audioGraph synth node (e.g. 'voices' | 'bass') — extensible node ids
+  z.object({ kind: z.literal('notes'), nodeId: idSchema }),
+  // any modulatable input port; written via the registry like a matrix route
+  z.object({ kind: z.literal('port'), port: portRefSchema }),
+]);
+export const SequenceSchema = z.object({
+  id: idSchema,
+  name: z.string().default(''),
+  enabled: z.boolean().default(true),
+  /** Scene-bound by default (runs/crossfades with its scene); absent = global. */
+  sceneId: idSchema.optional(),
+  /** Steps per beat (4 = semiquavers in 4/4). */
+  division: z.number().int().positive().max(16).default(4),
+  /** Steps per loop — variable per sequence. */
+  length: z.number().int().min(1).max(64).default(16),
+  swing: unipolar.default(0),
+  humanizeMs: z.number().nonnegative().default(0),
+  /** Default gate length as a fraction of one step. */
+  gate: unipolar.default(0.8),
+  target: SequenceTargetSchema,
+  steps: z.array(SequenceStepSchema).default([]),
+});
+
 // ---- gesture -------------------------------------------------------------------
 export const GestureBindingSchema = z.object({
   gesture: z.enum(['zoomDepth', 'touchX', 'touchY', 'dragVelocity', 'pressure', 'multiTouch']),
@@ -171,6 +214,7 @@ export const PatchSchema = z.looseObject({
   audioGraph: AudioGraphSchema,
   visualGraph: VisualGraphSchema,
   modulationMatrix: z.array(ModulationRouteSchema).default([]),
+  sequences: z.array(SequenceSchema).default([]),
 });
 
 // ---- inferred types (canonical) ------------------------------------------------
@@ -186,6 +230,9 @@ export type AudioGraph = z.infer<typeof AudioGraphSchema>;
 export type VisualGraphNode = z.infer<typeof VisualNodeSchema>;
 export type VisualGraph = z.infer<typeof VisualGraphSchema>;
 export type ModulationRoute = z.infer<typeof ModulationRouteSchema>;
+export type Sequence = z.infer<typeof SequenceSchema>;
+export type SequenceStep = z.infer<typeof SequenceStepSchema>;
+export type SequenceTarget = z.infer<typeof SequenceTargetSchema>;
 export type GestureBinding = z.infer<typeof GestureBindingSchema>;
 export type SceneAudioParams = z.infer<typeof SceneAudioParamsSchema>;
 export type SceneTransition = z.infer<typeof SceneTransitionSchema>;

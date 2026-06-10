@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { safeValidatePatch, validatePatch } from '../src/patch/schema';
 import { defaultPatch } from '../src/patch/default';
 import { parsePatchOrDefault } from '../src/patch/store';
+import { migratePatch, CURRENT_PATCH_VERSION } from '../src/patch/migrate';
 import borland from '../../../patches/borland.json';
 
 describe('patch document', () => {
@@ -36,5 +37,32 @@ describe('patch document', () => {
     expect(route).toBeDefined();
     if (route) route.source = 'no-dot-here';
     expect(safeValidatePatch(bad).success).toBe(false);
+  });
+});
+
+describe('patch migration (v1 → v2)', () => {
+  it('lifts a v1 document (no sequences) to the current version', () => {
+    const v1 = structuredClone(borland) as Record<string, unknown>;
+    (v1.meta as Record<string, unknown>).version = 1;
+    delete v1.sequences;
+    const migrated = migratePatch(v1) as { meta: { version: number }; sequences: unknown[] };
+    expect(migrated.meta.version).toBe(CURRENT_PATCH_VERSION);
+    expect(migrated.sequences).toEqual([]);
+    expect(safeValidatePatch(migrated).success).toBe(true);
+  });
+
+  it('is idempotent on a current document and passes through junk untouched', () => {
+    expect(migratePatch(structuredClone(borland))).toEqual(structuredClone(borland));
+    expect(migratePatch(null)).toBeNull();
+    expect(migratePatch({ nonsense: true })).toEqual({ nonsense: true });
+  });
+
+  it('parsePatchOrDefault migrates before validating', () => {
+    const v1 = structuredClone(borland) as Record<string, unknown>;
+    (v1.meta as Record<string, unknown>).version = 1;
+    delete v1.sequences;
+    const parsed = parsePatchOrDefault(v1);
+    expect(parsed.meta.version).toBe(CURRENT_PATCH_VERSION);
+    expect(parsed.sequences).toEqual([]);
   });
 });
