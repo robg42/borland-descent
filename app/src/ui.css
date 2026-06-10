@@ -448,6 +448,79 @@ input.field {
   line-height: 1.6;
 }
 
+/* ---- fx rack ----------------------------------------------------------------- */
+.fx {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.fx__add {
+  flex-wrap: wrap;
+}
+.fx__add .field {
+  min-width: 8rem;
+  flex: 1;
+}
+.fx__chain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.fx__chain-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--ink-faint);
+}
+.fx__nodes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+}
+.fx__node-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.fx__arrow {
+  font-size: 0.6rem;
+  color: var(--ink-faint);
+  padding: 0 0.1rem;
+}
+.fx__node {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  font-size: 0.64rem;
+}
+.fx__node--effect {
+  border-color: rgba(121, 199, 190, 0.25);
+  background: rgba(121, 199, 190, 0.05);
+}
+.fx__node-id {
+  color: var(--ink);
+  font-family: var(--font-mono);
+}
+.fx__node-mod {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+.fx__remove {
+  font-size: 0.65rem;
+  padding: 0 0.2rem;
+  line-height: 1;
+  opacity: 0.5;
+}
+.fx__remove:hover {
+  opacity: 1;
+}
+
 /* ---- sequencer panel --------------------------------------------------------- */
 .seq {
   display: flex;

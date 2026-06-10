@@ -14,6 +14,7 @@ import { MatrixTable } from './MatrixTable';
 import { PatchIO } from './PatchIO';
 import { SamplesPanel } from './SamplesPanel';
 import { SequencerPanel } from './SequencerPanel';
+import { FxRackPanel } from './FxRackPanel';
 
 /**
  * The studio: a live engine instance against the working Patch. The live preview +
@@ -345,6 +346,19 @@ export function StudioView() {
             <p className="panel__label">samples</p>
           </div>
           <SamplesPanel onAssign={assignSample} activeSceneName={scenes[sceneIndex]?.name} />
+        </section>
+
+        <section className="panel">
+          <div className="panel__head">
+            <p className="panel__label">fx rack</p>
+          </div>
+          <FxRackPanel
+            patch={engine?.patch ?? patch}
+            onPatchChange={(next) => {
+              setPatch(next);
+              setReload((r) => r + 1);
+            }}
+          />
         </section>
 
         <section className="panel">

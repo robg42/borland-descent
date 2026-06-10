@@ -64,3 +64,7 @@ export { VISUAL_MODULE_IDS } from './visual/shaders';
 
 // Sequencer runtime (eventsInWindow + scheduler)
 export { eventsInWindow, Sequencer } from './sequencer';
+
+// FX rack — insert/remove effects in the audio graph + available presets
+export { insertEffectBefore, removeEffect, EFFECT_PRESETS, PROTECTED_NODE_IDS } from './audio/effects/fxRack';
+export type { EffectPreset } from './audio/effects/fxRack';
