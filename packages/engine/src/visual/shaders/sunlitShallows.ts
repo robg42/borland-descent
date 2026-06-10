@@ -14,16 +14,21 @@ const vertexShader = /* glsl */ `
   }
 `;
 
-// The sunlit shallows: caustic light networks dancing over bright aqua water. Two
-// drifting fbm fields interfere into sharp light veins; sunlight thins with depth.
-// Structurally a different world from oceanicField (caustic interference, not
-// domain-warp), sharing the fog/flow/depth/hue port vocabulary.
+// Cathedral of Light: a fan of green-glass god-rays from an unseen sun above the
+// upper-left corner, cutting the frame diagonally over deepening teal. Three
+// superposed angular combs (7/14/23 shafts) counter-sweep at glacial speed while
+// dust-motes — the only upward motion in the piece — rise through the bright
+// wedges and flare when the bells strike. The gaps already belong to the deep;
+// the beams belong to the sky. Cheap by design: no fbm stacks, no loops — one
+// atan, two noise calls and two single-cell mote lookups per pixel.
 const fragmentShader = /* glsl */ `
   precision highp float;
   uniform float uTime;
   uniform vec2 uResolution;
-  uniform float uFog, uHue, uFlow, uDepth, uDark;
+  uniform float uFog, uFlow, uDepth, uShafts, uGlint, uDark;
   varying vec2 vUv;
+
+  const float TAU = 6.2831853;
 
   float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
   float noise(vec2 p){
@@ -33,38 +38,90 @@ const fragmentShader = /* glsl */ `
     float c = hash(i + vec2(0.0, 1.0)), d = hash(i + vec2(1.0, 1.0));
     return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
   }
-  float fbm(vec2 p){
-    float v = 0.0, a = 0.5;
-    for (int i = 0; i < 5; i++){ v += a * noise(p); p *= 2.02; a *= 0.5; }
-    return v;
+
+  // One angular comb of soft shafts fanning out from the sun anchor.
+  float beamSet(float ang, float freq, float phase, float sharp){
+    float s = 0.5 + 0.5 * sin(ang * freq + phase);
+    return pow(s, sharp);
+  }
+
+  // One mote layer: a single hash sparkle per grid cell, twinkle-phased by its
+  // own hash and gated so only a fraction glint at once. The jitter is clamped
+  // inside the cell, so no 3x3 neighbourhood search is needed.
+  float motes(vec2 wp, float scale, float t, float gate){
+    vec2 g = wp * scale;
+    vec2 id = floor(g), f = fract(g);
+    float h = hash(id);
+    vec2 jit = vec2(0.18) + 0.64 * vec2(h, hash(id + 7.3));
+    float d = length(f - jit);
+    float tw = 0.5 + 0.5 * sin(t * (0.6 + h) * 2.0 + h * TAU); // h*TAU: a scatter is lit at t=0
+    return smoothstep(gate, 1.0, tw) * exp(-d * d * 90.0);     // tight gaussian glint
   }
 
   void main(){
     vec2 uv = vUv;
     float aspect = uResolution.x / max(uResolution.y, 1.0);
-    vec2 p = vec2(uv.x * aspect, uv.y) * 4.0;
-    float t = uTime * (0.05 + uFlow * 0.2);
+    vec2 p = vec2((uv.x - 0.5) * aspect, uv.y);
+    float t = uTime * (0.3 + uFlow * 0.7);
 
-    // caustic interference: two drifting fields, their ridged difference = light veins
-    float a = fbm(p + vec2(t * 0.6, t * 0.3));
-    float b = fbm(p * 1.27 - vec2(t * 0.4, t * 0.5) + 9.1);
-    float veins = pow(1.0 - abs(a - b), 6.0);
-    float shimmer = fbm(p * 2.0 + t);
+    // The unseen sun sits above the upper-LEFT corner — top-centre radial light
+    // belongs to the surface scene — so the ray fan crosses the frame on the
+    // diagonal. Depth pushes it further away (longer, thinner rays); the clamp
+    // guarantees the atan seam, which points straight up from it, stays off-frame.
+    vec2 sun = vec2((0.15 - 0.5) * aspect, max(1.25 + uDepth * 0.5, 1.15));
+    vec2 d = p - sun;
+    float r = length(d);
+    float ang = atan(d.x, -d.y); // 0 = straight down from the sun
 
-    // sunlight is strongest near the surface (top), thinning with depth
-    float light = mix(1.0, 0.4, smoothstep(0.0, 1.0, (1.0 - uv.y) + uDepth * 0.25));
+    // The cathedral fan: three counter-sweeping combs. Bass (uShafts) widens the
+    // duty cycle and lifts the gain — the nave inhales with the low end. Shaft
+    // edges soften with distance from the sun so the narrow combs never crawl.
+    float sharp = mix(9.0, 3.0, uShafts);
+    sharp *= mix(1.0, 0.55, smoothstep(0.6, 1.6, r));
+    float fan = beamSet(ang, 14.0,  t * 0.05,       sharp)       * 0.55
+              + beamSet(ang, 23.0, -t * 0.04 + 1.7, sharp * 1.6) * 0.30
+              + beamSet(ang,  7.0,  t * 0.02 + 4.0, sharp * 0.7) * 0.45;
+    fan *= 0.65 + 0.55 * noise(vec2(ang * 9.0, t * 0.35)); // light wobbling through the moving surface
+    float decay = mix(1.1, 2.4, uDark);                    // deeper in the arc, light dies sooner
+    float beam = fan * exp(-max(r - 0.25, 0.0) * decay) * (0.55 + 0.45 * uShafts);
 
-    // calibrated so peak luminance stays ~0.6 — bright enough to bloom, not white out
-    vec3 water = mix(vec3(0.03, 0.22, 0.30), vec3(0.06, 0.40, 0.48), uHue);
-    vec3 deep = vec3(0.01, 0.08, 0.13);
-    vec3 col = mix(deep, water, clamp(shimmer * light, 0.0, 1.0));
-    col += veins * light * 0.22 * vec3(0.5, 0.85, 0.8); // subtle bright caustic veins
+    // Water body: a two-stop teal gradient plus one cheap noise octave. The gap
+    // light collapses fastest with the arc, so contrast RISES before brightness
+    // falls — leaving the scene, only the shafts survive against deep teal.
+    float body = noise(p * 3.0 + vec2(0.0, -t * 0.1));
+    float gapLight = mix(0.50, 0.14, uDark);
+    vec3 col = mix(vec3(0.027, 0.188, 0.212),  // #073036 deepening-teal floor
+                   vec3(0.180, 0.420, 0.368),  // #2E6B5E sea-green mid-water
+                   uv.y * gapLight * (0.7 + 0.3 * body));
 
-    col += uFog * 0.09 * vec3(0.3, 0.55, 0.55) * (0.5 + 0.5 * shimmer);
-    col *= mix(1.0, 0.28, uDark);
+    // The scene cedes gold: beam body is green-glass chartreuse, cooling toward
+    // pale sea-green at depth. Only a faint warm lift survives near the anchor —
+    // a luminous top edge, never sand-gold dominance.
+    vec3 beamCol = mix(vec3(0.624, 0.749, 0.541),  // #9FBF8A green-glass chartreuse
+                       vec3(0.50, 0.70, 0.55),     // cooler pale green at depth
+                       uDark * 0.7);
+    beamCol = mix(beamCol, vec3(0.76, 0.78, 0.56), 0.35 * exp(-max(r - 0.25, 0.0) * 2.0));
+    col += beam * beamCol * 0.9; // beam-core luma ~0.8, above the bloom threshold
 
-    float vig = smoothstep(1.3, 0.25, length(uv - 0.5));
-    col *= mix(0.65, 1.0, vig);
+    // Rising motes — the only upward motion in the seven scenes. Two parallax
+    // layers; bells (uGlint) drop the twinkle gate so constellations flare at
+    // once, while the arc raises it so fewer particles catch the failing light.
+    float rise = t * 0.06;
+    float gate = clamp(0.62 + 0.25 * uDark - 0.35 * uGlint, 0.1, 0.9);
+    float m = motes(p + vec2(0.0, -rise),       14.0, t,       gate)
+            + motes(p + vec2(3.7, -rise * 1.8), 26.0, t * 1.3, gate + 0.08);
+    m *= 0.35 + 0.65 * smoothstep(0.05, 0.5, beam);        // the dust lives IN the light
+    col += m * (0.6 + 1.8 * uGlint) * vec3(0.84, 0.93, 0.76); // pale glint, green-biased
+
+    // Fog: milky green scatter filling the gaps and softening the architecture —
+    // a volumetric haze that is brightest where it sits inside a beam.
+    col = mix(col, vec3(0.45, 0.55, 0.42) * (0.35 + 0.5 * beam), uFog * 0.22);
+
+    // Eased settle: mid-arc keeps its glow and the darkening accelerates only
+    // near the handoff to the thermocline — the structural dimming is already
+    // done by the ray decay and the collapsing gap light above.
+    col *= mix(1.0, 0.30, uDark * uDark);
+    col *= mix(0.7, 1.0, smoothstep(1.35, 0.3, length(uv - 0.5)));
 
     gl_FragColor = vec4(col, 1.0);
   }
@@ -78,9 +135,10 @@ export function createSunlitShallows(): VisualLayer {
       uTime: { value: 0 },
       uResolution: { value: new THREE.Vector2(1, 1) },
       uFog: { value: 0.45 },
-      uHue: { value: 0.6 },
       uFlow: { value: 0.4 },
       uDepth: { value: 0.15 },
+      uShafts: { value: 0.3 },
+      uGlint: { value: 0.15 },
       uDark: { value: 0.2 },
     },
     vertexShader,
@@ -107,9 +165,10 @@ export function createSunlitShallows(): VisualLayer {
     pass,
     registerPorts(nodeId, registry, params) {
       bind(registry, nodeId, 'fog', 'uFog', num(params.fog, 0.45));
-      bind(registry, nodeId, 'hue', 'uHue', num(params.hue, 0.6));
       bind(registry, nodeId, 'flow', 'uFlow', num(params.flow, 0.4));
       bind(registry, nodeId, 'depth', 'uDepth', num(params.depth, 0.15));
+      bind(registry, nodeId, 'shafts', 'uShafts', num(params.shafts, 0.3));
+      bind(registry, nodeId, 'glint', 'uGlint', num(params.glint, 0.15));
     },
     update(timeSec) {
       uniform('uTime').value = timeSec;

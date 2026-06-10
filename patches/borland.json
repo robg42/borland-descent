@@ -112,7 +112,7 @@
         "reverbSize": 0.85,
         "voices": { "maxPolyphony": 8 }
       },
-      "visualParams": {},
+      "visualParams": { "fog": 0.25, "flow": 0.45, "depth": 0.15, "glint": 0.5, "sun": 0.5, "bloomStrength": 0.95, "bloomRadius": 0.55, "bloomThreshold": 0.72, "grainIntensity": 0.06 },
       "gestureMap": [
         { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
         { "gesture": "touchX", "output": "gesture.touchX" },
@@ -135,7 +135,7 @@
         "reverbSize": 0.78,
         "voices": { "maxPolyphony": 8 }
       },
-      "visualParams": {},
+      "visualParams": { "fog": 0.45, "flow": 0.4, "depth": 0.15, "shafts": 0.3, "glint": 0.15, "bloomStrength": 1.15, "bloomRadius": 0.55, "bloomThreshold": 0.55, "grainIntensity": 0.07 },
       "gestureMap": [
         { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
         { "gesture": "touchX", "output": "gesture.touchX" },
@@ -158,7 +158,7 @@
         "reverbSize": 0.82,
         "voices": { "maxPolyphony": 8 }
       },
-      "visualParams": {},
+      "visualParams": { "fog": 0.35, "flow": 0.35, "depth": 0.3, "refract": 0.35, "dispersion": 0.3, "bloomStrength": 0.9, "bloomRadius": 0.3, "bloomThreshold": 0.75, "grainIntensity": 0.1 },
       "gestureMap": [
         { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
         { "gesture": "touchX", "output": "gesture.touchX" },
@@ -181,7 +181,7 @@
         "reverbSize": 0.86,
         "voices": { "maxPolyphony": 8 }
       },
-      "visualParams": {},
+      "visualParams": { "fog": 0.45, "flow": 0.3, "depth": 0.5, "lume": 0.55, "presence": 0.35, "bloomStrength": 0.55, "bloomRadius": 0.7, "bloomThreshold": 0.55, "grainIntensity": 0.12 },
       "gestureMap": [
         { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
         { "gesture": "touchX", "output": "gesture.touchX" },
@@ -204,7 +204,7 @@
         "reverbSize": 0.88,
         "voices": { "maxPolyphony": 7 }
       },
-      "visualParams": {},
+      "visualParams": { "fog": 0.25, "flow": 0.3, "depth": 0.5, "pulse": 0.0, "flicker": 0.0, "bloomStrength": 1.6, "bloomRadius": 0.6, "bloomThreshold": 0.15, "grainIntensity": 0.1 },
       "gestureMap": [
         { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
         { "gesture": "touchX", "output": "gesture.touchX" },
@@ -227,7 +227,7 @@
         "reverbSize": 0.9,
         "voices": { "maxPolyphony": 6 }
       },
-      "visualParams": {},
+      "visualParams": { "fog": 0.3, "flow": 0.15, "depth": 0.45, "pulse": 0.25, "sonar": 0.6, "bloomStrength": 0.15, "bloomRadius": 0.25, "bloomThreshold": 0.8, "grainIntensity": 0.14 },
       "gestureMap": [
         { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
         { "gesture": "touchX", "output": "gesture.touchX" },
@@ -250,7 +250,7 @@
         "reverbSize": 0.92,
         "voices": { "maxPolyphony": 10 }
       },
-      "visualParams": {},
+      "visualParams": { "fog": 0.25, "flow": 0.4, "depth": 0.5, "maw": 0.15, "glow": 0.45, "bloomStrength": 1.15, "bloomRadius": 0.55, "bloomThreshold": 0.62, "grainIntensity": 0.16 },
       "gestureMap": [
         { "gesture": "zoomDepth", "output": "gesture.zoomDepth" },
         { "gesture": "touchX", "output": "gesture.touchX" },
@@ -316,7 +316,18 @@
     { "id": "r4", "source": "fft.low", "target": "field.flow", "amount": 0.5, "curve": "linear", "smoothing": 150, "rate": "control", "enabled": true },
     { "id": "r5", "source": "masterMeter.level", "target": "bloom.strength", "amount": 0.6, "curve": "linear", "smoothing": 100, "rate": "control", "enabled": true },
     { "id": "r6", "source": "arc.darkness", "target": "drift.depth", "amount": 0.45, "curve": "linear", "smoothing": 400, "rate": "control", "enabled": true },
-    { "id": "r7", "source": "arc.darkness", "target": "tape.hiss", "amount": 0.03, "curve": "linear", "smoothing": 400, "rate": "control", "enabled": true }
+    { "id": "r7", "source": "arc.darkness", "target": "tape.hiss", "amount": 0.03, "curve": "linear", "smoothing": 400, "rate": "control", "enabled": true },
+    { "id": "r8", "source": "masterMeter.level", "target": "field.glint", "amount": 0.5, "curve": "linear", "smoothing": 120, "rate": "control", "enabled": true },
+    { "id": "r9", "source": "fft.high", "target": "field.glint", "amount": 0.4, "curve": "linear", "smoothing": 60, "rate": "control", "enabled": true },
+    { "id": "r10", "source": "fft.mid", "target": "field.refract", "amount": 0.5, "curve": "linear", "smoothing": 150, "rate": "control", "enabled": true },
+    { "id": "r11", "source": "masterMeter.level", "target": "field.lume", "amount": 0.4, "curve": "linear", "smoothing": 250, "rate": "control", "enabled": true },
+    { "id": "r12", "source": "fft.low", "target": "field.presence", "amount": 0.25, "curve": "linear", "smoothing": 600, "rate": "control", "enabled": true },
+    { "id": "r13", "source": "bassMeter.level", "target": "field.pulse", "amount": 0.7, "curve": "linear", "smoothing": 200, "rate": "control", "enabled": true },
+    { "id": "r14", "source": "fft.high", "target": "field.flicker", "amount": 0.5, "curve": "linear", "smoothing": 50, "rate": "control", "enabled": true },
+    { "id": "r15", "source": "masterMeter.level", "target": "field.sonar", "amount": 0.4, "curve": "linear", "smoothing": 300, "rate": "control", "enabled": true },
+    { "id": "r16", "source": "bassMeter.level", "target": "field.maw", "amount": 0.12, "curve": "linear", "smoothing": 250, "rate": "control", "enabled": true },
+    { "id": "r17", "source": "masterMeter.level", "target": "field.glow", "amount": 0.5, "curve": "linear", "smoothing": 200, "rate": "control", "enabled": true },
+    { "id": "r18", "source": "bassMeter.level", "target": "field.shafts", "amount": 0.35, "curve": "linear", "smoothing": 400, "rate": "control", "enabled": true }
   ],
   "sequences": []
 }

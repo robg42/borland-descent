@@ -105,21 +105,31 @@ export class VisualEngine {
 
     // 1. the scene's generative shader layer — the SCENE chooses the module, so
     // different scenes are structurally different worlds (the layer node id stays
-    // stable so the matrix's field.* routes carry across scenes).
+    // stable so the matrix's field.* routes carry across scenes). Scene-level
+    // visualParams override the global layer node's params, so each scene owns
+    // its own bases (and its post grade below) — the H5 per-scene tuning channel.
     const layerNode = opts.patch.visualGraph.layers[0];
+    const sceneParams = opts.scene.visualParams;
+    const sceneNum = (key: string, fallback: number): number => {
+      const v = sceneParams[key];
+      return typeof v === 'number' ? v : fallback;
+    };
     const moduleId = opts.scene.shaderModuleId;
     this.layer = createLayer(moduleId);
     this.composer.addPass(this.layer.pass);
-    this.layer.registerPorts(layerNode?.id ?? 'field', opts.registry, layerNode?.params ?? {});
+    this.layer.registerPorts(layerNode?.id ?? 'field', opts.registry, {
+      ...(layerNode?.params ?? {}),
+      ...sceneParams,
+    });
     this.layer.setResolution(w, h);
 
-    // 2. bloom
+    // 2. bloom — per-scene grade: scene.visualParams override the global node
     const bloomNode = findNode(opts.patch.visualGraph.postChain, 'bloom');
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(w, h),
-      num(bloomNode, 'strength', 0.8),
-      num(bloomNode, 'radius', 0.4),
-      num(bloomNode, 'threshold', 0.85),
+      sceneNum('bloomStrength', num(bloomNode, 'strength', 0.8)),
+      sceneNum('bloomRadius', num(bloomNode, 'radius', 0.4)),
+      sceneNum('bloomThreshold', num(bloomNode, 'threshold', 0.85)),
     );
     this.composer.addPass(this.bloom);
     opts.registry.addInput(makePortRef('bloom', 'strength'), {
@@ -135,7 +145,7 @@ export class VisualEngine {
     // 3. grain (custom pass — avoids FilmPass scanlines, fully controllable)
     const grainNode = findNode(opts.patch.visualGraph.postChain, 'grain');
     this.grain = new ShaderPass(grainShader);
-    this.grain.uniforms.uAmount!.value = num(grainNode, 'intensity', 0.05);
+    this.grain.uniforms.uAmount!.value = sceneNum('grainIntensity', num(grainNode, 'intensity', 0.05));
     this.composer.addPass(this.grain);
     opts.registry.addInput(makePortRef('grain', 'intensity'), {
       kind: 'unipolar',

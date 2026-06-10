@@ -14,14 +14,17 @@ const vertexShader = /* glsl */ `
   }
 `;
 
-// The thermocline: a wavering horizontal boundary where warm sunlit water meets the
-// cold dark below, with fine stratification bands and a refractive shimmer at the
-// interface. A layered/stratified domain (not warp or spiral), sharing fog/flow/depth.
+// Prism Horizon: ONE hard horizontal blade — the only hard line in the piece — splits
+// a dying amber-grey stratified sky above from steel-indigo isotherm striations below,
+// seen through a schlieren lens that bends and RGB-fringes them. The two halves shear
+// past each other in opposite directions; the seam is a literal prism (offset R/G/B
+// hairlines) that flares with the refract pad. As the arc darkens the cold claims the
+// frame: the blade rises 0.45 → 0.74, the warmth ashes out, the lines cool to blue.
 const fragmentShader = /* glsl */ `
   precision highp float;
   uniform float uTime;
   uniform vec2 uResolution;
-  uniform float uFog, uHue, uFlow, uDepth, uDark;
+  uniform float uFog, uFlow, uDepth, uRefract, uDisp, uDark;
   varying vec2 vUv;
 
   float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
@@ -32,46 +35,116 @@ const fragmentShader = /* glsl */ `
     float c = hash(i + vec2(0.0, 1.0)), d = hash(i + vec2(1.0, 1.0));
     return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
   }
-  float fbm(vec2 p){
+  float fbm3(vec2 p){
     float v = 0.0, a = 0.5;
-    for (int i = 0; i < 5; i++){ v += a * noise(p); p *= 2.02; a *= 0.5; }
+    for (int i = 0; i < 3; i++){ v += a * noise(p); p *= 2.03; a *= 0.5; }
     return v;
   }
 
+  // The optical interface — a function of x only, so the split stays a true horizontal
+  // blade. Two incommensurate sines plus low-frequency noise give a slow meniscus
+  // wobble; the phase constants freeze the t=0 seam in a gentle S (dipping left of
+  // centre, lifting right) for the reduced-motion still.
+  float lineY(float x, float t){
+    float base = mix(0.45, 0.74, uDark); // arc: the cold claims the frame
+    return base
+      + 0.014 * sin(x * 6.0 - t * 0.5 - 3.3)
+      + 0.007 * sin(x * 17.0 + t * 1.1 + 1.3)
+      + 0.020 * (noise(vec2(x * 2.5, t * 0.18 + 2.7)) - 0.5);
+  }
+
+  // The warm half — a dying stratified sky: graded horizontal banding, NOT an
+  // isotropic haze. The last warmth pools against the seam and ashes out overhead;
+  // the strata shear leftward, against the cold half's drift. Noise is kept at
+  // whisper amplitude — just enough to unstraighten the layers.
+  vec3 warmField(vec2 uv, float ly, float t, float aspect){
+    float h = (uv.y - ly) / max(1.0 - ly, 0.10); // 0 at the seam, 1 at the frame top
+    float drift = t * 0.012 * (0.3 + uFlow);     // glacial shear, opposite to below
+    float yb = h * 7.0
+      + 0.20 * sin(uv.x * aspect * 2.6 + drift * 3.0 + 0.8)
+      + 0.25 * (noise(vec2(uv.x * aspect * 1.4 + drift, h * 3.0 + 5.2)) - 0.5);
+    float strata = 0.5 + 0.5 * sin(yb * 3.1);
+    strata = mix(strata, 0.5 + 0.5 * sin(yb * 1.3 + 2.1), 0.45); // two widths, no rhythm
+    float glow = exp(-h * 2.6);                  // the grade: horizon-bright, grey above
+    vec2 sd = uv - vec2(0.38, 0.85);             // sun-memory lobe at the upper-left third
+    float sun = exp(-(6.0 * sd.x * sd.x + 14.0 * sd.y * sd.y));
+    // Values are LINEAR — the OutputPass sRGB-encodes, so linear 0.3 displays
+    // ≈ 0.62; the faded amber-grey must be authored low or it washes to white.
+    vec3 amber = mix(vec3(0.30, 0.255, 0.175), vec3(0.185, 0.18, 0.16), uDark); // warmth dies
+    vec3 ash = mix(vec3(0.12, 0.12, 0.115), vec3(0.085, 0.09, 0.10), uDark);
+    vec3 col = mix(ash, amber, glow * (0.55 + 0.45 * strata));
+    col += vec3(0.90, 0.85, 0.74) * sun * 0.32 * (1.0 - uDark); // lobe extinguishes late-arc
+    return mix(col, vec3(0.22, 0.22, 0.21), uFog * 0.25);       // fog greys the sky
+  }
+
+  // Thin pale isotherm lines on dark ground — re-evaluated per channel with offset
+  // coordinates for the chromatic tear, while the fbm grain g is shared.
+  float isoBands(float yw, float g){
+    return smoothstep(0.78, 0.99, 0.5 + 0.5 * sin(yw * 44.0 + g * 3.0));
+  }
+
+  // The cold half — striations through a wobbling schlieren lens, shearing the other
+  // way. The lens amplitude decays exponentially with depth (the gradient lives AT
+  // the thermocline) and the sqrt-warped depth packs the bands against the seam.
+  vec3 coldField(vec2 uv, float ly, float t, float aspect){
+    float d = ly - uv.y;                                       // depth below the seam
+    vec2 q = vec2(uv.x * aspect - t * 0.012 * (0.3 + uFlow), uv.y);
+    float reach = exp(-d * (6.0 - 4.0 * uDepth));              // lens strongest at the seam
+    float amp = uRefract * 0.05 * (0.35 + reach);
+    vec2 off = amp * vec2(noise(q * 3.0 + vec2(t * 0.15, 0.0)) - 0.5,
+                          noise(q * 3.0 + vec2(0.0, t * 0.11) + 7.3) - 0.5);
+    float g = fbm3((q + off) * 2.0);                           // shared grain — ONCE
+    float yw = sqrt(d + 0.02) * (2.0 + 1.5 * uDepth);          // sqrt packs bands at the seam
+    float ds = uDisp * (0.006 + 0.02 * reach);                 // fringe widens at the seam
+    vec3 b = vec3(isoBands(yw + (off.y + ds) * 1.6, g),        // R displaced up
+                  isoBands(yw + off.y * 1.6, g),               // G carries the lens only
+                  isoBands(yw + (off.y - ds) * 1.6, g));       // B down — the RGB tear
+    vec3 col = mix(vec3(0.039, 0.055, 0.118), vec3(0.208, 0.275, 0.420),
+                   0.25 + 0.5 * g * reach);
+    col += b * mix(vec3(0.30, 0.36, 0.46), vec3(0.18, 0.26, 0.42), uDark); // lines cool (linear)
+    col += vec3(0.63, 0.55, 0.40) * exp(-d * 26.0) * 0.30 * (1.0 - uDark * 0.7); // TIR smear
+    return mix(col, vec3(0.14, 0.16, 0.20), uFog * 0.35 * (1.0 - reach)); // fog lifts the deep
+  }
+
   void main(){
+    float t = uTime;
     vec2 uv = vUv;
     float aspect = uResolution.x / max(uResolution.y, 1.0);
-    vec2 p = vec2(uv.x * aspect, uv.y) * 3.0;
-    float t = uTime * (0.04 + uFlow * 0.16);
-    float depthY = 1.0 - uv.y; // 0 at top, 1 at the bottom
+    float ly = lineY(uv.x, t);
 
-    // the thermocline boundary — wavering across the frame, drifting with depth control
-    float boundary = 0.46 + uDepth * 0.12
-      + 0.05 * sin(uv.x * 6.2831 + t)
-      + (fbm(vec2(uv.x * 2.0, t * 0.2)) - 0.5) * 0.14;
-    float below = smoothstep(boundary - 0.03, boundary + 0.08, depthY);
+    // HARD branch on the seam — screen-coherent, so each pixel pays only its own
+    // half's cost. Do not soften this into a mix: the hard split is both the look
+    // and the budget.
+    vec3 col;
+    if (uv.y > ly) {
+      col = warmField(uv, ly, t, aspect);
+    } else {
+      col = coldField(uv, ly, t, aspect);
+    }
 
-    // fine horizontal stratification
-    float bands = 0.5 + 0.5 * sin(depthY * 46.0 + fbm(p) * 4.0 - t * 1.3);
-    float strat = mix(1.0, bands, 0.35);
+    // The prism blade: three ~1.5px lines offset one physical pixel apart, tinted
+    // R/G/B — widths in pixels via uResolution so the seam never aliases away.
+    float w = 1.6 / uResolution.y;
+    float po = 1.0 / uResolution.y;
+    vec3 blade = vec3(1.0 - smoothstep(0.0, w, abs(uv.y - ly - po)),
+                      1.0 - smoothstep(0.0, w, abs(uv.y - ly)),
+                      1.0 - smoothstep(0.0, w, abs(uv.y - ly + po)));
+    vec3 tint = mix(vec3(1.00, 0.92, 0.74), vec3(0.78, 0.90, 1.00), uDark); // warm → icy
+    // The pad flares the blade; the gain eases over the last stretch of residency so
+    // the crossfade over twilight's light cone reads as a horizon, not a scanline.
+    float gain = (0.9 + 0.4 * uRefract) * (1.0 - 0.55 * smoothstep(0.88, 1.0, uDark));
+    col += blade * tint * gain;
 
-    vec3 warm = mix(vec3(0.06, 0.34, 0.36), vec3(0.30, 0.42, 0.30), uHue); // sunlit above
-    vec3 cold = vec3(0.02, 0.05, 0.14);                                    // indigo below
-    vec3 col = mix(warm, cold, below) * strat;
-
-    // refractive shimmer right at the boundary seam ('interface' is a reserved word)
-    float seam = exp(-pow((depthY - boundary) * 14.0, 2.0));
-    col += seam * (0.18 + 0.2 * fbm(p * 3.0 + t)) * vec3(0.5, 0.8, 0.85);
-
-    col += uFog * 0.12 * vec3(0.3, 0.45, 0.5) * (0.5 + 0.5 * bands);
-    col *= mix(1.0, 0.30, uDark);
-
-    float vig = smoothstep(1.3, 0.2, length(uv - 0.5));
-    col *= mix(0.7, 1.0, vig);
-
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(min(col, vec3(1.2)), 1.0); // pre-bloom clamp — load-bearing
   }
 `;
+
+// The arc's darkness MACRO (not the arc position) sweeps ≈[0.41, 0.52] while this
+// scene is resident (arcRange [0.32, 0.46] interpolated through the canonical patch's
+// keyframes): remap to a local 0..1 so the blade completes its whole 0.45 → 0.74 climb
+// on screen instead of crawling a few percent. Retune if the arc keyframes change.
+const ARC_WINDOW_IN = 0.41;
+const ARC_WINDOW_OUT = 0.52;
 
 export function createThermocline(): VisualLayer {
   const pass = new ShaderPass({
@@ -80,11 +153,12 @@ export function createThermocline(): VisualLayer {
       tDiffuse: { value: null },
       uTime: { value: 0 },
       uResolution: { value: new THREE.Vector2(1, 1) },
-      uFog: { value: 0.4 },
-      uHue: { value: 0.4 },
+      uFog: { value: 0.35 },
       uFlow: { value: 0.35 },
       uDepth: { value: 0.3 },
-      uDark: { value: 0.3 },
+      uRefract: { value: 0.35 },
+      uDisp: { value: 0.3 },
+      uDark: { value: 0 },
     },
     vertexShader,
     fragmentShader,
@@ -109,10 +183,11 @@ export function createThermocline(): VisualLayer {
   return {
     pass,
     registerPorts(nodeId, registry, params) {
-      bind(registry, nodeId, 'fog', 'uFog', num(params.fog, 0.4));
-      bind(registry, nodeId, 'hue', 'uHue', num(params.hue, 0.4));
+      bind(registry, nodeId, 'fog', 'uFog', num(params.fog, 0.35));
       bind(registry, nodeId, 'flow', 'uFlow', num(params.flow, 0.35));
       bind(registry, nodeId, 'depth', 'uDepth', num(params.depth, 0.3));
+      bind(registry, nodeId, 'refract', 'uRefract', num(params.refract, 0.35));
+      bind(registry, nodeId, 'dispersion', 'uDisp', num(params.dispersion, 0.3));
     },
     update(timeSec) {
       uniform('uTime').value = timeSec;
@@ -121,7 +196,8 @@ export function createThermocline(): VisualLayer {
       (uniform('uResolution').value as THREE.Vector2).set(width, height);
     },
     setArc(darkness) {
-      uniform('uDark').value = clamp(darkness, 0, 1);
+      const local = (clamp(darkness, 0, 1) - ARC_WINDOW_IN) / (ARC_WINDOW_OUT - ARC_WINDOW_IN);
+      uniform('uDark').value = clamp(local, 0, 1);
     },
     dispose() {
       pass.dispose();
