@@ -50,6 +50,9 @@ export class Engine {
   private disposed = false;
   private manualArc = 0;
 
+  /** In-flight programmatic arc glide (double-tap → next scene). */
+  private glide: { from: number; to: number; t: number; dur: number } | null = null;
+
   // ---- crossfade state (§18.2) ----
   private transitioning = false;
   private incoming: SceneInstance | null = null;
@@ -94,6 +97,7 @@ export class Engine {
       this.gesture = new GestureController(opts.container);
       this.gesture.setArcPosition(this.manualArc); // preserve arc across a scene rebuild
       this.gesture.registerPorts(this.registry);
+      this.gesture.onDoubleTap = () => this.advanceScene();
       // ONE renderer for the whole engine (V1 rebuild) — scenes mount layers into it.
       this.host = new VisualHost({ container: opts.container, reducedMotion: this.reducedMotion });
       this.active = this.makeScene(this.activeIndex, this.registry);
@@ -187,6 +191,25 @@ export class Engine {
       if (arc >= lo - margin && arc <= hi + margin) return this.activeIndex;
     }
     return this.coveringScene(arc);
+  }
+
+  /** Double-tap: carry the listener into the NEXT scene. The arc glides into the
+   *  next scene's range so the ordinary range-crossing machinery starts the
+   *  crossfade; from the last scene it snaps back to the surface instead (a
+   *  glide would sweep backwards through every zone and chain transitions).
+   *  Player-only (autoScene) — the studio selects scenes from its dropdown. */
+  private advanceScene(): void {
+    if (!this.autoScene || this.disposed) return;
+    const scenes = this.patch.scenes;
+    const next = (this.activeIndex + 1) % scenes.length;
+    const [lo, hi] = scenes[next]!.arcRange;
+    const target = Math.min(lo + 0.035, (lo + hi) / 2);
+    if (next === 0) {
+      this.glide = null;
+      this.setArcPosition(target); // resurface
+    } else {
+      this.glide = { from: this.arcPosition, to: target, t: 0, dur: 1.4 };
+    }
   }
 
   /** Begin a crossfade to `index`: build the incoming scene into its own registry (so
@@ -383,6 +406,18 @@ export class Engine {
     const tick = (ts: number): void => {
       const dt = this.lastTs === 0 ? 0 : (ts - this.lastTs) / 1000;
       this.lastTs = ts;
+      // Advance any double-tap glide; a pinch/drag/wheel from the user cancels it.
+      if (this.glide) {
+        if (this.gesture?.consumeUserAdjust()) {
+          this.glide = null;
+        } else {
+          this.glide.t += dt;
+          const k = Math.min(1, this.glide.t / this.glide.dur);
+          const eased = k * k * (3 - 2 * k);
+          this.setArcPosition(this.glide.from + (this.glide.to - this.glide.from) * eased);
+          if (k >= 1) this.glide = null;
+        }
+      }
       const pos = this.arcPosition;
       // start a crossfade when the arc enters another scene's range
       if (this.autoScene && this.running && !this.transitioning) {
