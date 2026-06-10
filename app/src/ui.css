@@ -447,3 +447,154 @@ input.field {
   color: var(--ink-faint);
   line-height: 1.6;
 }
+
+/* ---- sequencer panel --------------------------------------------------------- */
+.seq {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.seq__tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.seq__tab {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0.28rem 0.55rem;
+  cursor: pointer;
+}
+.seq__tab--sel {
+  color: var(--ink);
+  border-color: var(--hairline);
+  background: rgba(121, 199, 190, 0.07);
+}
+
+.seq__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.seq__name {
+  flex: 1;
+  min-width: 0;
+}
+.seq__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.seq__settings {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.seq__fg {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.seq__fg--wide {
+  flex: 1;
+  min-width: 8rem;
+}
+.seq__fl {
+  font-size: 0.64rem;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+.seq__fg .field {
+  min-width: 3.5rem;
+}
+.seq__fg input[type='range'] {
+  margin: 0;
+}
+.seq__fg input[type='number'] {
+  width: 3.5rem;
+}
+
+.seq__grid-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.seq__grid {
+  display: flex;
+  gap: 2px;
+  padding-bottom: 2px;
+}
+.seq__cell {
+  flex: 0 0 20px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hairline);
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  padding: 0;
+  transition: border-color 0.1s;
+}
+.seq__cell--beat {
+  border-left-color: rgba(121, 199, 190, 0.25);
+}
+.seq__cell--on {
+  background: rgba(121, 199, 190, 0.15);
+  border-color: rgba(121, 199, 190, 0.5);
+}
+.seq__cell--on::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--vel, 0.8) * 100%);
+  background: rgba(121, 199, 190, 0.55);
+  border-radius: 1px;
+}
+.seq__cell--sel {
+  border-color: rgba(121, 199, 190, 0.9);
+}
+.seq__cell:hover {
+  border-color: rgba(121, 199, 190, 0.4);
+}
+
+.seq__step-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--hairline);
+  padding-top: 0.6rem;
+}
+.seq__step-label {
+  font-size: 0.6rem;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  margin-bottom: 0.2rem;
+}
+.seq__degree-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.seq__degree-btn {
+  min-width: 1.6rem;
+  padding: 0.2rem 0.25rem;
+}

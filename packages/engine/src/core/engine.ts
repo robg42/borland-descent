@@ -427,6 +427,25 @@ export class Engine {
     this.writeParamToPatch(ref, value);
   }
 
+  /** Hot-swap the sequences list (studio edits — no engine rebuild needed). */
+  setSequences(sequences: Patch['sequences']): void {
+    this.patch.sequences = sequences;
+    if (this.sequencer) {
+      this.sequencer.updateSequences(sequences);
+    } else if (sequences.length > 0 && this.active && this.running) {
+      // Sequences were added after start() — spin up the scheduler now.
+      const activeScene = this.active;
+      this.sequencer = new Sequencer({
+        sequences,
+        transport: this.transport,
+        registry: this.registry,
+        getSynth: (nodeId) => activeScene.getSynth(nodeId),
+        ctx: this.seqCtx(this.activeIndex),
+      });
+      this.sequencer.start();
+    }
+  }
+
   /** Replace the modulation routes live (re-wires audio-rate connections). */
   setRoutes(routes: ModulationRoute[]): void {
     this.routes = routes;

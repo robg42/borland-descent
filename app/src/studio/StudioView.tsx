@@ -5,6 +5,7 @@ import {
   VISUAL_MODULE_IDS,
   type ModulationRoute,
   type Patch,
+  type Sequence,
 } from '@borland/engine';
 import { useEngine } from '../engineReact/useEngine';
 import { TransportBar } from './TransportBar';
@@ -12,6 +13,7 @@ import { SceneParams } from './SceneParams';
 import { MatrixTable } from './MatrixTable';
 import { PatchIO } from './PatchIO';
 import { SamplesPanel } from './SamplesPanel';
+import { SequencerPanel } from './SequencerPanel';
 
 /**
  * The studio: a live engine instance against the working Patch. The live preview +
@@ -32,6 +34,7 @@ export function StudioView() {
   const [playing, setPlaying] = useState(false);
   const [tick, setTick] = useState(0);
   const [routes, setRoutes] = useState<ModulationRoute[]>([]);
+  const [sequences, setSequences] = useState<Sequence[]>([]);
   const startedRef = useRef(false);
 
   // load the canonical patch at boot
@@ -65,6 +68,7 @@ export function StudioView() {
 
   useEffect(() => {
     setRoutes(patch?.modulationMatrix ?? []);
+    setSequences(patch?.sequences ?? []);
   }, [patch]);
 
   // keep the arc slider in step with gestures on the preview
@@ -132,6 +136,14 @@ export function StudioView() {
     (next: ModulationRoute[]) => {
       setRoutes(next);
       engine?.setRoutes(next);
+    },
+    [engine],
+  );
+
+  const applySequences = useCallback(
+    (next: Sequence[]) => {
+      setSequences(next);
+      engine?.setSequences(next);
     },
     [engine],
   );
@@ -333,6 +345,13 @@ export function StudioView() {
             <p className="panel__label">samples</p>
           </div>
           <SamplesPanel onAssign={assignSample} activeSceneName={scenes[sceneIndex]?.name} />
+        </section>
+
+        <section className="panel">
+          <div className="panel__head">
+            <p className="panel__label">sequencer</p>
+          </div>
+          <SequencerPanel sequences={sequences} inputs={inputs} onChange={applySequences} />
         </section>
 
         <section className="panel">
