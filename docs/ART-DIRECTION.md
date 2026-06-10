@@ -125,6 +125,35 @@ late-arc cool-drift clamped so every arc position reads crimson-led; the ring
 stays pink-crimson, never white-hot, and the warp stays organic (a throat, not
 a tidy sci-fi accretion disc).
 
+## Roster colour rules (binding for every module, present and future)
+
+The client direction is standing: **no neon — organic colour.** Applied across
+the roster on 2026-06-10 (commit `844c09c`); every new module is born
+compliant. The rules:
+
+1. **Hues come from earth, mineral, sea and biology.** The working set:
+   ochre, terracotta, clay, madder, moss, sage, kelp, sea-glass teal, slate,
+   plum, dusty rose, sandstone, bone, charcoal. If a colour could be read off
+   a shop sign or an LED strip, it does not ship.
+2. **Saturation is capped** at roughly 0.55 in linear RGB terms (no
+   channel-ratio extremes like `vec3(0.78, 0.06, 0.26)`). Remember values are
+   LINEAR and the OutputPass sRGB-encodes: linear 0.3 already displays ≈ 0.6.
+3. **No full-spectrum cosine palettes.** The IQ rainbow trick
+   (`0.5 + 0.5*cos(... + vec3(0.0, 0.33, 0.67))`) is banned. Where a palette
+   must animate, drive a **constrained arc** instead: a `mix` between two
+   doctrine hues (≤ ~120° apart) on the same animating scalar — the motion
+   survives, the spectrum narrows.
+4. **Accents may be brighter than the field, never purer.** Drama is carried
+   by LUMINANCE (what blooms, what flashes), not by chroma. A flash is
+   bone-white or the field's own hue lifted — not electric.
+5. **Identity lives in the hue family, not its intensity.** A re-grade must
+   leave a module recognisable: Naon stays packed colourful geometry — the
+   inks come from a kiln, not a sign shop.
+6. The previous "Noctiluca is the only fully-saturated-emissives scene"
+   exception is **rescinded** — its plankton light is now plankton-green and
+   kelp-teal. There are currently no exceptions; any future one needs the
+   client's explicit sign-off, recorded here.
+
 ## Engine enablers (built before the shaders, Workstream C)
 
 1. `scene.visualParams` merged over the global layer-node params (un-deadens
