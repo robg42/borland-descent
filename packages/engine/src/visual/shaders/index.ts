@@ -5,9 +5,14 @@ import { createThermocline } from './thermocline';
 import { createTwilightZone } from './twilightZone';
 import { createMidnightZone } from './midnightZone';
 import { createAbyssalPlain } from './abyssalPlain';
+import { createSignal } from './signal';
+import { createSwarm } from './swarm';
+import { createBeams } from './beams';
 import type { VisualLayer, VisualLayerFactory } from './types';
 
-/** Registry of visual layer modules by id. Scenes select their world by these keys. */
+/** Registry of visual layer modules by id. Scenes select their world by these keys.
+ *  The first seven are the descent's scenes; signal/swarm/beams are the V3
+ *  technique-family modules (N = 10) — selectable from the studio's picker. */
 const FACTORIES: Record<string, VisualLayerFactory> = {
   oceanicField: createOceanicField,
   abyss: createAbyss,
@@ -16,6 +21,9 @@ const FACTORIES: Record<string, VisualLayerFactory> = {
   twilightZone: createTwilightZone,
   midnightZone: createMidnightZone,
   abyssalPlain: createAbyssalPlain,
+  signal: createSignal,
+  swarm: createSwarm,
+  beams: createBeams,
 };
 
 export function createLayer(moduleId: string): VisualLayer {

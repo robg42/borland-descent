@@ -150,7 +150,14 @@ preset-capable. Glitch/feedback as an 11th when the RT pool lands.
 > modules migrated, studio module picker). V2 ✅ (feature layer: 8 log bands /
 > flux / onset trigger ports; trigger→numeric envelope routing in the Matrix;
 > 8 new headless tests; sources appear in the routing UI automatically).
-> Next: V3 modules (signal / swarm / beams), then V4 presets.
+> V3 ✅ — N = 10: signal (Signal), swarm (Murmuration) and beams (Axis) live
+> behind the descriptor contract and selectable in the studio picker, each
+> with trigger/bass/flux-ready scene ports. Decision note: swarm ships as a
+> flow-warped fragment-pass field (reads as a murmuration well within budget);
+> a true Points-based GPU particle system and the feedback/glitch module both
+> wait on the scene-graph/RT-pool capability work and the frame-budget check.
+> Next: V4 presets. A double-tap gesture (player) now advances to the next
+> scene via an arc glide; pinch/drag/wheel cancels it.
 
 - **V1 — Host + contract (the structural phase).** Single shared renderer +
   composer + RT pool; crossfade as blend pass (closes REVIEW H3);
