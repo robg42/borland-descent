@@ -33,14 +33,14 @@ const vertexShader = /* glsl */ `
 `;
 
 // Axis — architectural light (Nonotak / UVA / 1024 lineage), in two registers:
-// a dim family of INFINITE parallel planes sharing one slowly rotating axis
-// (the architecture), and over them a brighter rig of SHORT travelling
-// streaks — finite segments pitched between 45° and 90° from the horizontal,
-// drifting across the frame. Planes and streaks each sequence on their own
-// deterministic clocks (the flash is the identity). Pulse (trigger-routed)
-// flashes the streaks over the bloom threshold; width breathes both registers
-// with the bass. The arc strips the rig — fewer, narrower lights — until one
-// faint traveller crosses a single pale plane.
+// a dim family of INFINITE parallel planes on one visibly rotating axis (the
+// architecture), and a brighter rig of short LASER BOLTS that shoot across the
+// frame perpendicular to the planes — each bolt oriented along its own flight
+// path, cutting the beam array square-on as the whole rig turns. Registers
+// sequence on unrelated clocks (the flash is the identity). Pulse
+// (trigger-routed) flashes the bolts over the bloom threshold; width breathes
+// both registers with the bass. The arc strips the rig — fewer, thinner
+// lights — until one faint bolt crosses a single pale plane.
 const fragmentShader = /* glsl */ `
   precision highp float;
   uniform float uTime;
@@ -52,7 +52,6 @@ const fragmentShader = /* glsl */ `
 
   void main(){
     float aspect = uResolution.x / max(uResolution.y, 1.0);
-    vec2 P = vec2(vUv.x * aspect, vUv.y);
     float t = uTime;
 
     float v = 0.0;
@@ -74,37 +73,40 @@ const fragmentShader = /* glsl */ `
     v += pHard * pSeq * 0.4 + pGlow * 0.05 * (0.4 + 0.6 * pSeq); // the dim base layer
     g += pGlow * 0.02;
 
-    // ---- register two: the short streaks FLOWING across the screen — their
-    // travel clock is unrelated to the planes' rotation, so the two registers
-    // never read as one rigid body ----
+    // ---- register two: short LASER BOLTS that cross the big beams — each is
+    // oriented along its own flight path, travelling perpendicular to the
+    // planes (the crossing direction rotates with them, so a bolt always cuts
+    // the array square-on, give or take a per-bolt jitter), shooting over the
+    // whole frame in a couple of seconds ----
     float count = mix(4.0, 7.0, uDepth) * (1.0 - 0.5 * uDark); // the arc strips the rig
-    float travel = 0.09 + uFlow * 0.30; // a streak crosses the frame in ~5-10s
-    float wBase = mix(0.02, 0.06, uWidth) * (1.0 - 0.35 * uDark);
-    // branch-free fixed loop: streaks beyond the count contribute zero via on
+    float travel = 0.45 + uFlow * 0.9;  // bolt speed — a frame crossing in ~1.5-3s
+    float wBase = mix(0.012, 0.04, uWidth) * (1.0 - 0.35 * uDark); // laser-thin
+    float R = 0.5 * length(vec2(aspect, 1.0)); // frame half-diagonal, centred coords
+    // branch-free fixed loop: bolts beyond the count contribute zero via on
     for (int i = 0; i < 7; i++){
       float fi = float(i);
       float on = step(fi + 0.5, count + 0.5);
       vec2 h = vec2(hash(vec2(fi, 1.3)), hash(vec2(fi, 7.7)));
-      // pitch locked between 45° and 90° from horizontal (PI/4 .. PI/2)
-      float ang = mix(0.7854, 1.5708, hash(vec2(fi, 3.9)));
-      vec2 u = vec2(cos(ang), sin(ang));
-      // each streak drifts across the frame — mostly sideways, a slow rise.
-      // The wrap-space margins are PROPORTIONAL to the frame (a portrait frame
-      // is barely half a unit wide — absolute margins would park most of the
-      // travel off-screen); phase offsets compose the t=0 still in-frame.
-      float cx = (fract(h.x + t * travel * (0.5 + h.y)) * 1.3 - 0.15) * aspect;
-      float cy = fract(h.y + t * travel * 0.3 * (0.3 + h.x)) * 1.2 - 0.1;
-      float len = mix(0.22, 0.5, hash(vec2(fi, 5.1))) * (1.0 + 0.3 * uDepth);
-      // finite segment: hard core between soft end-caps, tight local haze
-      vec2 d = P - vec2(cx, cy);
+      // flight axis = the planes' NORMAL (always crossing them), jittered ±~14°
+      float jit = (hash(vec2(fi, 3.9)) - 0.5) * 0.5;
+      vec2 u = vec2(cos(pAng + jit), sin(pAng + jit));
+      vec2 n = vec2(-u.y, u.x); // the track-offset axis, parallel to the planes
+      // each bolt sweeps the crossing axis on its own clock and parallel track
+      float spanS = 2.0 * R + 0.7;
+      float sPos = (fract(h.x + t * travel * (0.6 + 0.8 * h.y)) * spanS) - R - 0.35;
+      float lOff = (hash(vec2(fi, 5.7)) - 0.5) * 2.0 * R;
+      vec2 c = u * sPos + n * lOff;
+      float len = mix(0.14, 0.32, hash(vec2(fi, 5.1)));
+      // finite bolt: hard core between soft end-caps, tight local haze
+      vec2 d = pc - c;
       float along = abs(dot(d, u));
-      float perp = abs(dot(d, vec2(-u.y, u.x)));
-      float cap = 1.0 - smoothstep(len * 0.5 - 0.05, len * 0.5 + 0.06, along);
-      float core = (1.0 - smoothstep(wBase * 0.5, wBase * 0.5 + 0.012, perp)) * cap;
-      // the per-streak flash sequencing — each gates on its own clock
-      float seq = 0.4 + 0.6 * step(0.38, hash(vec2(fi, floor(t * (0.5 + uFlow * 2.2) + h.x * 4.0))));
-      v += on * core * seq * (0.7 + uPulse * 1.2); // the flash carries it into bloom
-      g += on * exp(-perp * 14.0) * cap * 0.03 * (0.4 + 0.6 * seq);
+      float perp = abs(dot(d, n));
+      float cap = 1.0 - smoothstep(len * 0.5 - 0.04, len * 0.5 + 0.05, along);
+      float core = (1.0 - smoothstep(wBase * 0.5, wBase * 0.5 + 0.010, perp)) * cap;
+      // per-bolt intensity flicker on its own clock; pulse flashes them harder
+      float seq = 0.55 + 0.45 * step(0.38, hash(vec2(fi, floor(t * (0.5 + uFlow * 2.2) + h.x * 4.0))));
+      v += on * core * seq * (0.85 + uPulse * 1.2); // bright — these are the lasers
+      g += on * exp(-perp * 16.0) * cap * 0.03 * (0.4 + 0.6 * seq);
     }
     v = min(v, 1.1);
 
