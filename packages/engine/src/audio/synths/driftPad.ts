@@ -8,6 +8,9 @@ import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from
 const CUTOFF_MIN = 80;
 const CUTOFF_MAX = 12000;
 
+const OSC_TYPES = ['fatsawtooth', 'sawtooth', 'fattriangle', 'triangle', 'fatsquare', 'square', 'sine'] as const;
+const FILTER_TYPES = ['lowpass', 'highpass', 'bandpass', 'notch'] as const;
+
 /**
  * driftPad — warm, slow, polyphonic pad voices destined for the reverb bus.
  *
@@ -99,6 +102,36 @@ export function createDriftPad(opts?: SynthOptions): SynthModule {
         min: 0,
         max: 6,
         write: (v) => poly.set({ filterEnvelope: { octaves: clamp(v, 0, 6) } }),
+      });
+
+      // Oscillator type (enum index → string).
+      const baseOscIdx = Math.round(clamp(numParam(params, 'oscType', 0), 0, OSC_TYPES.length - 1));
+      poly.set({ oscillator: { type: OSC_TYPES[baseOscIdx] } });
+      registry.addInput(makePortRef(nodeId, 'oscType'), {
+        kind: 'option',
+        base: baseOscIdx,
+        min: 0,
+        max: OSC_TYPES.length - 1,
+        options: [...OSC_TYPES],
+        write: (v) => {
+          const idx = Math.round(clamp(v, 0, OSC_TYPES.length - 1));
+          poly.set({ oscillator: { type: OSC_TYPES[idx] } });
+        },
+      });
+
+      // Filter type (enum index → string).
+      const baseFilterIdx = Math.round(clamp(numParam(params, 'filterType', 0), 0, FILTER_TYPES.length - 1));
+      filter.type = FILTER_TYPES[baseFilterIdx] as BiquadFilterType;
+      registry.addInput(makePortRef(nodeId, 'filterType'), {
+        kind: 'option',
+        base: baseFilterIdx,
+        min: 0,
+        max: FILTER_TYPES.length - 1,
+        options: [...FILTER_TYPES],
+        write: (v) => {
+          const idx = Math.round(clamp(v, 0, FILTER_TYPES.length - 1));
+          filter.type = FILTER_TYPES[idx] as BiquadFilterType;
+        },
       });
     },
     dispose() {

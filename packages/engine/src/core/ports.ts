@@ -5,7 +5,7 @@
  * type-compatible ports.
  */
 
-export const PORT_KINDS = ['scalar', 'unipolar', 'bipolar', 'trigger', 'vector'] as const;
+export const PORT_KINDS = ['scalar', 'unipolar', 'bipolar', 'trigger', 'vector', 'option'] as const;
 export type PortKind = (typeof PORT_KINDS)[number];
 export type PortDirection = 'in' | 'out';
 
@@ -34,8 +34,11 @@ export function parsePortRef(ref: PortRef): { nodeId: string; portName: string }
 /** Whether an OUTPUT port of kind `from` may drive an INPUT port of kind `to`.
  *  V2: a trigger SOURCE may drive numeric targets — the matrix converts the
  *  pulse into a decaying envelope (the route's smoothing is its release), so
- *  onsets can gate any parameter. Nothing numeric may drive a trigger input. */
+ *  onsets can gate any parameter. Nothing numeric may drive a trigger input.
+ *  Option ports are not drivable by the matrix — they are set via setInputBase
+ *  or their writeOption string API only. */
 export function isCompatible(from: PortKind, to: PortKind): boolean {
+  if (to === 'option' || from === 'option') return false;
   if (to === 'trigger') return from === 'trigger';
   if (from === 'trigger') return to === 'scalar' || to === 'unipolar' || to === 'bipolar';
   if (from === 'vector' || to === 'vector') return from === to;

@@ -71,10 +71,33 @@ export function SceneParams({ engine, inputs, patch, onAutomate }: Props) {
   }
 
   const ctl = (p: InputPortInfo) => {
-    const min = p.min ?? 0;
-    const max = p.max ?? 1;
     const value = vals[p.ref] ?? p.base;
     const port = p.ref.split('.')[1] ?? p.ref;
+
+    if (p.kind === 'option' && p.options && p.options.length > 0) {
+      const idx = Math.round(value);
+      return (
+        <div className="ctl" key={p.ref} style={{ gridTemplateColumns: '1fr auto' }}>
+          <span className="ctl__name" title={p.ref}>{port}</span>
+          <span />
+          <select
+            className="ctl__range field"
+            value={p.options[idx] ?? p.options[0]}
+            onChange={(e) => {
+              const i = p.options!.indexOf(e.target.value);
+              if (i >= 0) set(p.ref, i);
+            }}
+          >
+            {p.options.map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
+    const min = p.min ?? 0;
+    const max = p.max ?? 1;
     const step = (max - min) / 200 || 0.01;
     return (
       <div className="ctl" key={p.ref} style={{ gridTemplateColumns: '1fr auto auto' }}>

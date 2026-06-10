@@ -26,6 +26,8 @@ export interface SignalInput {
   write: (value: number) => void;
   /** Native Tone Param/Signal for audio-rate routing, if connectable. */
   audioTarget?: Tone.InputNode;
+  /** For 'option' kind: the ordered list of string choices. */
+  options?: string[];
 }
 
 /** Lightweight descriptions for the studio UI (sliders + route dropdowns). */
@@ -35,6 +37,8 @@ export interface InputPortInfo {
   base: number;
   min?: number;
   max?: number;
+  /** Populated for 'option' kind: the ordered string choices. */
+  options?: string[];
 }
 export interface OutputPortInfo {
   ref: string;
@@ -70,6 +74,7 @@ export class SignalRegistry {
       base: i.base,
       min: i.min,
       max: i.max,
+      options: i.options,
     }));
   }
   listOutputs(): OutputPortInfo[] {
