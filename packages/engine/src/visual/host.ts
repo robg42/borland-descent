@@ -86,6 +86,14 @@ export interface VisualHostOptions {
   reducedMotion?: boolean;
 }
 
+// Auto-degrade ladder: each step is triggered after sustained over-budget frames
+// (frameMs EMA > 24 ms for > 2 s). Recovered when EMA falls back under 18 ms.
+// 0 = full quality, 1 = DPR capped at 1.5, 2 = DPR 1, 3 = bloom off.
+const DPR_AT_STEP = [2, 1.5, 1, 1] as const;
+const DEGRADE_THRESHOLD_MS = 24;
+const RECOVER_THRESHOLD_MS = 18;
+const DEGRADE_WINDOW_S = 2;
+
 export class VisualHost {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly composer: EffectComposer;
@@ -103,6 +111,15 @@ export class VisualHost {
   private contextLost = false;
   readonly reducedMotion: boolean;
 
+  // ---- perf instrumentation (C P1) ----
+  private frameEma = 16.7;         // EMA of render time (ms); prime at 60 fps
+  private overBudgetAcc = 0;       // seconds spent over DEGRADE_THRESHOLD_MS
+  private underBudgetAcc = 0;      // seconds spent under RECOVER_THRESHOLD_MS
+  private degradeStep = 0;         // 0 = full, 1 = DPR 1.5, 2 = DPR 1, 3 = bloom off
+  private bloomEnabled = true;
+
+  get frameMs(): number { return this.frameEma; }
+
   private readonly onContextLost = (e: Event): void => {
     e.preventDefault();
     this.contextLost = true;
@@ -117,6 +134,19 @@ export class VisualHost {
       opts.reducedMotion ??
       (typeof window !== 'undefined' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+    // WebGL2 capability check — show a styled fallback if unsupported.
+    const testCtx = document.createElement('canvas').getContext('webgl2');
+    if (!testCtx) {
+      const msg = document.createElement('div');
+      msg.textContent = 'WebGL 2 is not available in this browser. Try Chrome or Safari 15+.';
+      Object.assign(msg.style, {
+        position: 'absolute', inset: '0', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', color: '#8899aa', fontFamily: 'sans-serif',
+        fontSize: '14px', padding: '24px', textAlign: 'center',
+      });
+      opts.container.appendChild(msg);
+    }
 
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'low-power' });
     this.renderer.setClearColor(0x04070a, 1);
@@ -250,7 +280,7 @@ export class VisualHost {
   private setChainSteady(): void {
     this.composer.passes.length = 0;
     if (this.active) this.composer.addPass(this.active.layer.pass);
-    this.composer.addPass(this.bloom);
+    if (this.bloomEnabled) this.composer.addPass(this.bloom);
     this.composer.addPass(this.grain);
     this.composer.addPass(this.output);
   }
@@ -258,7 +288,7 @@ export class VisualHost {
   private setChainFade(): void {
     this.composer.passes.length = 0;
     this.composer.addPass(this.blend);
-    this.composer.addPass(this.bloom);
+    if (this.bloomEnabled) this.composer.addPass(this.bloom);
     this.composer.addPass(this.grain);
     this.composer.addPass(this.output);
   }
@@ -280,6 +310,7 @@ export class VisualHost {
 
   render(timeSeconds: number, deltaSeconds: number): void {
     if (this.contextLost || !this.active) return;
+    const t0 = performance.now();
     this.active.layer.update(timeSeconds);
     if (this.incoming && this.rtA && this.rtB) {
       // Fade: each layer renders once into its pooled target, the blend pass
@@ -293,6 +324,56 @@ export class VisualHost {
       this.blend.uniforms.tB!.value = this.rtB.texture;
     }
     this.composer.render(deltaSeconds);
+
+    // Frame-time EMA (α ≈ 0.1 — slow, stable readout).
+    const elapsed = performance.now() - t0;
+    this.frameEma += 0.1 * (elapsed - this.frameEma);
+
+    // Auto-degrade / recover ladder.
+    if (deltaSeconds > 0) this.updateDegrade(deltaSeconds);
+  }
+
+  private updateDegrade(dt: number): void {
+    if (this.frameEma > DEGRADE_THRESHOLD_MS) {
+      this.overBudgetAcc += dt;
+      this.underBudgetAcc = 0;
+    } else if (this.frameEma < RECOVER_THRESHOLD_MS) {
+      this.underBudgetAcc += dt;
+      this.overBudgetAcc = 0;
+    } else {
+      this.overBudgetAcc = 0;
+      this.underBudgetAcc = 0;
+    }
+
+    if (this.overBudgetAcc >= DEGRADE_WINDOW_S && this.degradeStep < 3) {
+      this.degradeStep++;
+      this.overBudgetAcc = 0;
+      this.applyDegradeStep();
+      console.warn(`[borland] perf degrade → step ${this.degradeStep} (frameMs EMA ${this.frameEma.toFixed(1)} ms)`);
+    } else if (this.underBudgetAcc >= DEGRADE_WINDOW_S * 2 && this.degradeStep > 0) {
+      this.degradeStep--;
+      this.underBudgetAcc = 0;
+      this.applyDegradeStep();
+    }
+  }
+
+  private applyDegradeStep(): void {
+    const maxDpr = DPR_AT_STEP[this.degradeStep] ?? 1;
+    const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
+    const dpr = Math.min(rawDpr, maxDpr);
+    this.renderer.setPixelRatio(dpr);
+    this.composer.setPixelRatio(dpr);
+    const { w, h } = this.size();
+    this.rtA?.setSize(w * dpr, h * dpr);
+    this.rtB?.setSize(w * dpr, h * dpr);
+
+    const bloomOn = this.degradeStep < 3;
+    if (bloomOn !== this.bloomEnabled) {
+      this.bloomEnabled = bloomOn;
+      // Rebuild whichever chain is active so bloom is included/excluded.
+      if (this.incoming) this.setChainFade();
+      else this.setChainSteady();
+    }
   }
 
   resize(): void {

@@ -101,7 +101,7 @@ export function PlayerView() {
           position: 'absolute',
           left: '8%',
           right: '8%',
-          bottom: '15%',
+          bottom: 'calc(15% + env(safe-area-inset-bottom, 0px))',
           textAlign: 'center',
           pointerEvents: 'none',
           color: 'rgba(238, 242, 248, 0.92)',

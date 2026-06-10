@@ -31,6 +31,11 @@ body {
 .player {
   position: fixed;
   inset: 0;
+  /* Extend under notch / home bar on iOS (viewport-fit=cover is set in <head>). */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   background: #000;
   overflow: hidden;
 }
@@ -46,7 +51,11 @@ body {
   place-content: center;
   justify-items: center;
   gap: 1.5rem;
-  padding: 2rem;
+  /* Safe-area padding so BEGIN is never under the home bar. */
+  padding: max(2rem, calc(1rem + env(safe-area-inset-top)))
+           max(2rem, calc(1rem + env(safe-area-inset-right)))
+           max(2rem, calc(1rem + env(safe-area-inset-bottom)))
+           max(2rem, calc(1rem + env(safe-area-inset-left)));
   width: 100%;
   border: 0;
   cursor: pointer;

@@ -105,7 +105,7 @@ export class Engine {
     // The arc position is itself a modulation SOURCE (arc.darkness, …), read live each
     // frame — so routes can drive anything from the descent. Host-level: re-registered
     // into each scene's registry (the active one and any incoming one during a crossfade).
-    this.registerArcPorts(this.registry);
+    this.registerHostPorts(this.registry);
 
     if (opts.container) {
       this.gesture = new GestureController(opts.container);
@@ -165,10 +165,10 @@ export class Engine {
     });
   }
 
-  /** Expose the arc macros as modulation SOURCE ports (arc.darkness, arc.density, …),
-   *  evaluated at the current arc position each frame. Host-level (survives scene swaps),
-   *  so the descent itself can drive params — e.g. tape hiss / pitch drift deepening. */
-  private registerArcPorts(registry: SignalRegistry): void {
+  /** Register all host-level output ports (arc macros + perf) into a registry.
+   *  Called for both the active registry and any incoming registry during a crossfade,
+   *  so these ports survive scene swaps. */
+  private registerHostPorts(registry: SignalRegistry): void {
     const keys = [
       'darkness',
       'rhythmicWeight',
@@ -183,6 +183,11 @@ export class Engine {
         read: () => macrosAt(this.patch.dna.arc, this.arcPosition)[key],
       });
     }
+    // perf.frameMs — the renderer's EMA frame time; readable by the matrix / studio.
+    registry.addOutput(makePortRef('perf', 'frameMs'), {
+      kind: 'scalar',
+      read: () => this.host?.frameMs ?? 16.7,
+    });
   }
 
   /** The scene whose arcRange covers `arc` (clamped to the ends if none does). */
@@ -241,7 +246,7 @@ export class Engine {
 
     const reg = new SignalRegistry();
     this.gesture?.registerPorts(reg);
-    this.registerArcPorts(reg);
+    this.registerHostPorts(reg);
     const incoming = this.makeScene(index, reg);
     this.host?.mountIncoming(this.visualArgs(index, reg)); // renders at blend mix 0
     this.incoming = incoming;
