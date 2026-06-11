@@ -213,7 +213,49 @@ function buildCompressor(params: Record<string, Scalar>): BuiltNode {
   return {
     input: comp,
     output: comp,
-    registerPorts() { /* threshold/ratio/attack/release could be ports; deferred */ },
+    registerPorts(nodeId, registry) {
+      const baseThreshold = num(params, 'threshold', -18);
+      comp.threshold.value = baseThreshold;
+      registry.addInput(makePortRef(nodeId, 'threshold'), {
+        kind: 'scalar',
+        base: baseThreshold,
+        min: -60,
+        max: 0,
+        write: (v) => { comp.threshold.value = clamp(v, -60, 0); },
+        audioTarget: comp.threshold,
+      });
+
+      const baseRatio = num(params, 'ratio', 2);
+      comp.ratio.value = baseRatio;
+      registry.addInput(makePortRef(nodeId, 'ratio'), {
+        kind: 'scalar',
+        base: baseRatio,
+        min: 1,
+        max: 20,
+        write: (v) => { comp.ratio.value = clamp(v, 1, 20); },
+        audioTarget: comp.ratio,
+      });
+
+      const baseAttack = num(params, 'attack', 0.03);
+      comp.attack.value = baseAttack;
+      registry.addInput(makePortRef(nodeId, 'attack'), {
+        kind: 'scalar',
+        base: baseAttack,
+        min: 0,
+        max: 1,
+        write: (v) => { comp.attack.value = clamp(v, 0, 1); },
+      });
+
+      const baseRelease = num(params, 'release', 0.25);
+      comp.release.value = baseRelease;
+      registry.addInput(makePortRef(nodeId, 'release'), {
+        kind: 'scalar',
+        base: baseRelease,
+        min: 0,
+        max: 1,
+        write: (v) => { comp.release.value = clamp(v, 0, 1); },
+      });
+    },
     dispose() { comp.dispose(); },
   };
 }

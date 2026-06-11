@@ -8,6 +8,8 @@ import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from
 const CUTOFF_MIN = 60;
 const CUTOFF_MAX = 9000;
 
+const FILTER_TYPES = ['lowpass', 'highpass', 'bandpass', 'notch'] as const;
+
 /**
  * voidChoir — a dark, FM-based polyphonic voice for the deeper scene. Structurally
  * different from driftPad (FM synthesis with a modulation envelope, not a filtered
@@ -87,6 +89,20 @@ export function createVoidChoir(opts?: SynthOptions): SynthModule {
         min: 0,
         max: 25,
         write: (v) => poly.set({ modulationIndex: clamp(v, 0, 25) }),
+      });
+
+      const baseFilterIdx = Math.round(clamp(numParam(params, 'filterType', 0), 0, FILTER_TYPES.length - 1));
+      filter.type = FILTER_TYPES[baseFilterIdx] as BiquadFilterType;
+      registry.addInput(makePortRef(nodeId, 'filterType'), {
+        kind: 'option',
+        base: baseFilterIdx,
+        min: 0,
+        max: FILTER_TYPES.length - 1,
+        options: [...FILTER_TYPES],
+        write: (v) => {
+          const idx = Math.round(clamp(v, 0, FILTER_TYPES.length - 1));
+          filter.type = FILTER_TYPES[idx] as BiquadFilterType;
+        },
       });
     },
     dispose() {

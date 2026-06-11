@@ -8,6 +8,8 @@ import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from
 const CUTOFF_MIN = 300;
 const CUTOFF_MAX = 14000;
 
+const FILTER_TYPES = ['lowpass', 'highpass', 'bandpass'] as const;
+
 /**
  * glassBells — the sunlit shallows: bright, struck-glass shimmer. FM synthesis with
  * an inharmonic harmonicity and a fast, percussive modulation envelope, so each note
@@ -96,6 +98,20 @@ export function createGlassBells(opts?: SynthOptions): SynthModule {
         min: 0,
         max: 25,
         write: (v) => poly.set({ modulationIndex: clamp(v, 0, 25) }),
+      });
+
+      const baseFilterIdx = Math.round(clamp(numParam(params, 'filterType', 0), 0, FILTER_TYPES.length - 1));
+      filter.type = FILTER_TYPES[baseFilterIdx] as BiquadFilterType;
+      registry.addInput(makePortRef(nodeId, 'filterType'), {
+        kind: 'option',
+        base: baseFilterIdx,
+        min: 0,
+        max: FILTER_TYPES.length - 1,
+        options: [...FILTER_TYPES],
+        write: (v) => {
+          const idx = Math.round(clamp(v, 0, FILTER_TYPES.length - 1));
+          filter.type = FILTER_TYPES[idx] as BiquadFilterType;
+        },
       });
     },
     dispose() {
