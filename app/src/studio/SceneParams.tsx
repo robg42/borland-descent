@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { memo, type CSSProperties, useEffect, useState } from 'react';
 import type { Engine, InputPortInfo, Patch } from '@borland/engine';
 
 interface Props {
@@ -38,7 +38,7 @@ function categoryOf(nodeId: string, patch: Patch | null): string {
  * visual params). Every modulatable input is a slider; editing sets the port's base value
  * live; the ⤳ button drops a modulation route targeting the parameter into the matrix.
  */
-export function SceneParams({ engine, inputs, patch, onAutomate }: Props) {
+export const SceneParams = memo(function SceneParams({ engine, inputs, patch, onAutomate }: Props) {
   const [vals, setVals] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -151,7 +151,7 @@ export function SceneParams({ engine, inputs, patch, onAutomate }: Props) {
       ))}
     </div>
   );
-}
+});
 
 const CAT_STYLE: CSSProperties = {
   fontSize: '0.66rem',

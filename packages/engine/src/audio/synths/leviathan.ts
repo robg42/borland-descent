@@ -1,9 +1,6 @@
 import * as Tone from 'tone';
-import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
-import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from './types';
+import type { SynthModule, SynthOptions } from './types';
+import { addSetterPort, disposeAll, registerVoicePorts, triggerHz } from './helpers';
 
 const CUTOFF_MIN = 60;
 const CUTOFF_MAX = 7000;
@@ -39,79 +36,32 @@ export function createLeviathan(opts?: SynthOptions): SynthModule {
 
   return {
     output: out,
-    trigger(midi, durationSec, time, velocity) {
-      poly.triggerAttackRelease(midiToFreq(midi), durationSec, time, clamp(velocity, 0, 1));
-    },
-    registerPorts(nodeId, registry: SignalRegistry, params: Record<string, Scalar>) {
-      const baseCutoff = clamp(numParam(params, 'cutoff', 1100), CUTOFF_MIN, CUTOFF_MAX);
-      filter.frequency.value = baseCutoff;
-      registry.addInput(makePortRef(nodeId, 'cutoff'), {
-        kind: 'scalar',
-        base: baseCutoff,
-        min: CUTOFF_MIN,
-        max: CUTOFF_MAX,
-        write: (v) => {
-          filter.frequency.value = clamp(v, CUTOFF_MIN, CUTOFF_MAX);
+    trigger: triggerHz(poly),
+    registerPorts(nodeId, registry, params) {
+      registerVoicePorts(registry, nodeId, params, {
+        cutoff: { param: filter.frequency, min: CUTOFF_MIN, max: CUTOFF_MAX, fallback: 1100 },
+        level: { param: out.gain, fallback: 0.7 },
+        detune: { fallback: 0, apply: (v) => poly.set({ detune: v }) },
+        adsr: {
+          defaults: { attack: 2.5, decay: 1.0, sustain: 0.8, release: 5.0 },
+          setEnv: (env) => poly.set({ voice0: { envelope: env }, voice1: { envelope: env } }),
         },
-        audioTarget: filter.frequency,
       });
-
-      const baseLevel = numParam(params, 'level', 0.7);
-      out.gain.value = baseLevel;
-      registry.addInput(makePortRef(nodeId, 'level'), {
-        kind: 'unipolar',
-        base: baseLevel,
-        min: 0,
-        max: 1.5,
-        write: (v) => {
-          out.gain.value = clamp(v, 0, 1.5);
-        },
-        audioTarget: out.gain,
-      });
-
-      const baseDetune = numParam(params, 'detune', 0);
-      poly.set({ detune: baseDetune });
-      registry.addInput(makePortRef(nodeId, 'detune'), {
-        kind: 'bipolar',
-        base: baseDetune,
-        write: (v) => poly.set({ detune: clamp(v, -1200, 1200) }),
-      });
-
-      registerAdsrPorts(
-        nodeId,
-        registry,
-        params,
-        { attack: 2.5, decay: 1.0, sustain: 0.8, release: 5.0 },
-        (env) => poly.set({ voice0: { envelope: env }, voice1: { envelope: env } }),
-      );
-
-      const baseHarmonicity = numParam(params, 'harmonicity', 0.5);
-      poly.set({ harmonicity: baseHarmonicity });
-      registry.addInput(makePortRef(nodeId, 'harmonicity'), {
+      addSetterPort(registry, nodeId, 'harmonicity', params, {
         kind: 'scalar',
-        base: baseHarmonicity,
+        fallback: 0.5,
         min: 0.25,
         max: 4,
-        write: (v) => poly.set({ harmonicity: clamp(v, 0.25, 4) }),
+        apply: (v) => poly.set({ harmonicity: v }),
       });
-      const baseVibrato = numParam(params, 'vibratoAmount', 0.18);
-      poly.set({ vibratoAmount: baseVibrato });
-      registry.addInput(makePortRef(nodeId, 'vibratoAmount'), {
+      addSetterPort(registry, nodeId, 'vibratoAmount', params, {
         kind: 'unipolar',
-        base: baseVibrato,
+        fallback: 0.18,
         min: 0,
         max: 1,
-        write: (v) => poly.set({ vibratoAmount: clamp(v, 0, 1) }),
+        apply: (v) => poly.set({ vibratoAmount: v }),
       });
     },
-    dispose() {
-      poly.dispose();
-      filter.dispose();
-      out.dispose();
-    },
+    dispose: disposeAll(poly, filter, out),
   };
-}
-
-function midiToFreq(midi: number): number {
-  return 440 * Math.pow(2, (midi - 69) / 12);
 }

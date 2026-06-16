@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import type { InputPortInfo } from '@borland/engine';
 import type { Sequence, SequenceStep } from '@borland/engine';
 
@@ -43,7 +43,7 @@ function makeSeq(existing: Sequence[]): Sequence {
   };
 }
 
-export function SequencerPanel({ sequences, inputs, onChange }: Props) {
+export const SequencerPanel = memo(function SequencerPanel({ sequences, inputs, onChange }: Props) {
   const [selSeq, setSelSeq] = useState(0);
   const [selStep, setSelStep] = useState<number | null>(null);
 
@@ -277,7 +277,7 @@ export function SequencerPanel({ sequences, inputs, onChange }: Props) {
       )}
     </div>
   );
-}
+});
 
 interface StepDetailProps {
   step: SequenceStep;

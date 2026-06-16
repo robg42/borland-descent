@@ -22,6 +22,15 @@ const BAND_RELEASE_SEC = 0.25;
 const FLUX_ATTACK_SEC = 0.01;
 const FLUX_RELEASE_SEC = 0.15;
 
+// 256 output bins = native fftSize 512 (the project budget is 512–1024). At 64 bins
+// everything below ~350 Hz fell into ONE bin — the "bass" feature band was blind and
+// flux/onset were computed on a smeared spectrum. 256 bins give ~86 Hz resolution at
+// 44.1 kHz for the same once-per-frame cost class.
+const FFT_BINS = 256;
+// Top feature-band edge ≈ 16 kHz at 44.1 kHz — above the tape's hfCutoff there is
+// only hiss, which would pollute the high band.
+const FFT_TOP_BIN = 186;
+
 /**
  * Signal-output measurements for the modulation matrix. The legacy trio —
  * master/bass RMS and the coarse fft.low/mid/high bands — is unchanged so every
@@ -32,13 +41,15 @@ const FLUX_RELEASE_SEC = 0.15;
  * the read*() methods just return the cached values.
  */
 export class Analysers {
-  readonly masterMeter = new Tone.Meter({ normalRange: true, smoothing: 0.85 });
-  readonly bassMeter = new Tone.Meter({ normalRange: true, smoothing: 0.8 });
-  readonly fft = new Tone.FFT({ size: 64, smoothing: 0.7 });
+  // Meter smoothing trimmed (0.85/0.8 → 0.75/0.7): the meters drive visual routes
+  // that carry their own per-route smoothing, so the raw reads should lead, not lag.
+  readonly masterMeter = new Tone.Meter({ normalRange: true, smoothing: 0.75 });
+  readonly bassMeter = new Tone.Meter({ normalRange: true, smoothing: 0.7 });
+  readonly fft = new Tone.FFT({ size: FFT_BINS, smoothing: 0.55 });
 
-  private readonly mags = new Float32Array(64);
-  private readonly prevMags = new Float32Array(64);
-  private readonly bandEdges = logBandEdges(FEATURE_BANDS, 1, 48);
+  private readonly mags = new Float32Array(FFT_BINS);
+  private readonly prevMags = new Float32Array(FFT_BINS);
+  private readonly bandEdges = logBandEdges(FEATURE_BANDS, 1, FFT_TOP_BIN);
   private readonly bandEnv = new Float32Array(FEATURE_BANDS);
   private readonly onset: OnsetState = createOnsetState();
   private binsDb: Float32Array | null = null;

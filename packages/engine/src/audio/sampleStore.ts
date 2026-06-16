@@ -20,6 +20,11 @@ interface SampleRecord extends SampleMeta {
 const DB_NAME = 'borland-samples';
 const STORE = 'samples';
 
+/** Hard ceiling on a single sample's encoded size. Decoding is synchronous-ish and
+ *  the decoded PCM is ~10× the file for compressed formats — an unbounded file can
+ *  freeze the tab and blow the IndexedDB quota. 32 MB ≈ 3 min of stereo WAV. */
+const MAX_SAMPLE_BYTES = 32 * 1024 * 1024;
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
@@ -119,6 +124,11 @@ class SampleStore {
 
   /** Decode + cache a chosen file and persist its bytes. Returns the ready entry. */
   async add(name: string, rootMidi: number, bytes: ArrayBuffer): Promise<SampleEntry> {
+    if (bytes.byteLength > MAX_SAMPLE_BYTES) {
+      throw new Error(
+        `"${name}" is ${(bytes.byteLength / 1048576).toFixed(0)} MB — samples are capped at ${MAX_SAMPLE_BYTES / 1048576} MB.`,
+      );
+    }
     const id = makeId();
     const buffer = await bufferFromBytes(bytes);
     const meta: SampleMeta = { id, name, rootMidi };

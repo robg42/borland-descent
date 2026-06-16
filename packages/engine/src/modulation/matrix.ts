@@ -17,6 +17,24 @@ import { evaluateControlTargets } from './evaluate';
  * sum, but a single deterministic smoothing — the slowest (max) across those routes —
  * governs the result, so reordering routes can no longer change the feel.
  */
+/** Routes that apply in the given scene: untagged routes are global. */
+export function routesForScene(routes: ModulationRoute[], sceneId: string): ModulationRoute[] {
+  return routes.filter((r) => !r.sceneId || r.sceneId === sceneId);
+}
+
+// A dropped route is worth ONE warning per page session, not one per Matrix rebuild —
+// StrictMode double-builds plus a crossfade per scene turned the same message into
+// hundreds of console lines. Repeats go to console.debug for verbose sessions.
+const warnedRoutes = new Set<string>();
+function warnRouteOnce(key: string, message: string): void {
+  if (warnedRoutes.has(key)) {
+    console.debug(message);
+    return;
+  }
+  warnedRoutes.add(key);
+  console.warn(message);
+}
+
 export class Matrix {
   private readonly audioGains: Tone.Gain[] = [];
   /** Enabled, type-compatible control routes with both ports registered. */
@@ -45,13 +63,15 @@ export class Matrix {
       const out = this.registry.getOutput(r.source);
       const inp = this.registry.getInput(r.target);
       if (!out || !inp) {
-        console.warn(
+        warnRouteOnce(
+          `${r.id}:unknown`,
           `[borland] route ${r.source}→${r.target}: unknown ${!out ? 'source' : 'target'} port; skipped.`,
         );
         continue;
       }
       if (!isCompatible(out.kind, inp.kind)) {
-        console.warn(
+        warnRouteOnce(
+          `${r.id}:incompatible`,
           `[borland] route ${r.source}→${r.target}: incompatible port kinds (${out.kind}→${inp.kind}); skipped.`,
         );
         continue;
@@ -74,7 +94,10 @@ export class Matrix {
 
   private wireAudioRoute(r: ModulationRoute, out: SignalOutput, inp: SignalInput): void {
     if (!out.audioNode || !inp.audioTarget) {
-      console.warn(`[borland] audio-rate route ${r.source}→${r.target} is not natively connectable; skipped.`);
+      warnRouteOnce(
+        `${r.id}:audio`,
+        `[borland] audio-rate route ${r.source}→${r.target} is not natively connectable; skipped.`,
+      );
       return;
     }
     const gain = new Tone.Gain(r.amount);
@@ -102,6 +125,14 @@ export class Matrix {
           ? this.triggerEnv.get(route.id)
           : this.registry.getOutput(route.source)?.read(),
       (ref) => this.registry.getInput(ref)?.base,
+      (ref) => {
+        // amount is a fraction of the target port's range (min/max from the port
+        // definition); ports without declared bounds keep the legacy 1:1 scale.
+        const inp = this.registry.getInput(ref);
+        if (!inp || inp.min === undefined || inp.max === undefined) return 1;
+        const span = inp.max - inp.min;
+        return Number.isFinite(span) && span > 0 ? span : 1;
+      },
     );
     for (const [ref, raw] of targets) {
       const inp = this.registry.getInput(ref);

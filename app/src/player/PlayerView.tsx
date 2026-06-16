@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { JsonPatchStore, audioContextState, type Patch, type Scene } from '@borland/engine';
+import type { Patch, Scene } from '@borland/engine';
 import { useEngine } from '../engineReact/useEngine';
 
 /**
@@ -20,12 +20,17 @@ export function PlayerView() {
   const [sceneName, setSceneName] = useState('');
   const [nameVisible, setNameVisible] = useState(false);
   const nameTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [hintVisible, setHintVisible] = useState(false);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Load the canonical patch at boot; the store falls back to the bundled default.
+  // The engine module arrives via dynamic import — the ONLY reference may not be
+  // static, or tone + three land back in the entry chunk and block first paint.
   useEffect(() => {
     let cancelled = false;
-    const store = new JsonPatchStore({ url: `${import.meta.env.BASE_URL}borland.json` });
-    void store.load().then((loaded) => {
+    void import('@borland/engine').then(async ({ JsonPatchStore }) => {
+      const store = new JsonPatchStore({ url: `${import.meta.env.BASE_URL}borland.json` });
+      const loaded = await store.load();
       if (!cancelled) setPatch(loaded);
     });
     return () => {
@@ -43,9 +48,20 @@ export function PlayerView() {
   useEffect(
     () => () => {
       if (nameTimer.current) clearTimeout(nameTimer.current);
+      if (hintTimer.current) clearTimeout(hintTimer.current);
     },
     [],
   );
+
+  // Whisper the one gesture that matters once the veil lifts, then get out of the way.
+  useEffect(() => {
+    if (!started || audioBlocked) return;
+    setHintVisible(true);
+    hintTimer.current = setTimeout(() => setHintVisible(false), 6000);
+    return () => {
+      if (hintTimer.current) clearTimeout(hintTimer.current);
+    };
+  }, [started, audioBlocked]);
 
   const engine = useEngine(patch, container, patch ? 1 : 0, {
     autoScene: true,
@@ -61,7 +77,7 @@ export function PlayerView() {
         setStarted(true);
         // iOS may not have opened output yet — surface the state and offer a resume.
         setAudioBlocked(!engine.audioRunning);
-        setAudioState(audioContextState());
+        setAudioState(engine.audioState);
       })
       .catch((err: unknown) => console.error('[borland] could not begin', err))
       .finally(() => setBusy(false));
@@ -70,7 +86,7 @@ export function PlayerView() {
   const resume = useCallback(() => {
     if (!engine) return;
     void engine.resume().then((ok) => {
-      setAudioState(audioContextState());
+      setAudioState(engine.audioState);
       setAudioBlocked(!ok);
     });
   }, [engine]);
@@ -116,6 +132,27 @@ export function PlayerView() {
         }}
       >
         {sceneName}
+      </div>
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          left: '8%',
+          right: '8%',
+          top: 'calc(10% + env(safe-area-inset-top, 0px))',
+          textAlign: 'center',
+          pointerEvents: 'none',
+          color: 'rgba(238, 242, 248, 0.7)',
+          fontSize: '0.78rem',
+          fontWeight: 300,
+          letterSpacing: '0.32em',
+          textTransform: 'uppercase',
+          textShadow: '0 1px 24px rgba(0, 0, 0, 0.8)',
+          opacity: hintVisible ? 1 : 0,
+          transition: `opacity ${hintVisible ? '1.2s' : '2s'} ease`,
+        }}
+      >
+        drag · scroll · pinch — descend
       </div>
       <button
         type="button"

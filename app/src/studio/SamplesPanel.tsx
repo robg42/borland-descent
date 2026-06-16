@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   sampleStore,
   previewSample,
@@ -24,7 +24,7 @@ type ResynthKind = 'paulstretch' | 'granular';
  * IndexedDB); a sample that's the scene voice exposes its level / filter / envelope in
  * Scene Parameters for editing and as targets in the Modulation Matrix for automation.
  */
-export function SamplesPanel({ onAssign, activeSceneName }: Props) {
+export const SamplesPanel = memo(function SamplesPanel({ onAssign, activeSceneName }: Props) {
   const [samples, setSamples] = useState<SampleMeta[]>([]);
   const [rootMidi, setRootMidi] = useState(60);
   const [busy, setBusy] = useState(false);
@@ -264,4 +264,4 @@ export function SamplesPanel({ onAssign, activeSceneName }: Props) {
       </p>
     </div>
   );
-}
+});

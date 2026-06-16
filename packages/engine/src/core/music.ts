@@ -5,6 +5,17 @@ export function midiToFreq(midi: number): number {
 }
 
 /**
+ * Arc-mapped tempo: the surface takes the DNA range's top, the deep end its floor —
+ * the descent literally slows as the pressure builds. Pure, so the mapping is
+ * testable and the engine only owns the smoothing.
+ */
+export function bpmAt(tempoRange: [number, number], position: number): number {
+  const [lo, hi] = tempoRange;
+  const p = Math.min(1, Math.max(0, position));
+  return hi - (hi - lo) * p;
+}
+
+/**
  * Map a scale-degree walk to a MIDI pitch. `scale` is semitone offsets within an
  * octave (e.g. natural minor = [0,2,3,5,7,8,10]); negative/large degrees wrap with
  * octave shifts. `octaveBaseMidi` anchors degree 0.

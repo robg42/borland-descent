@@ -7,7 +7,7 @@ import type { SynthModule } from '../synths/types';
 import type { Analysers } from '../analysers';
 import { TapeWarmth } from './tapeWarmth';
 import { generateHallIR } from './hallIR';
-import { smoothWrite } from '../smoothWrite';
+import { smoothWrite } from '../../core/params';
 
 /** The uniform contract every built audio-graph node exposes. */
 export interface BuiltNode {
@@ -221,7 +221,7 @@ function buildCompressor(params: Record<string, Scalar>): BuiltNode {
         base: baseThreshold,
         min: -60,
         max: 0,
-        write: (v) => { comp.threshold.value = clamp(v, -60, 0); },
+        write: (v) => { smoothWrite(comp.threshold, clamp(v, -60, 0)); },
         audioTarget: comp.threshold,
       });
 
@@ -232,7 +232,7 @@ function buildCompressor(params: Record<string, Scalar>): BuiltNode {
         base: baseRatio,
         min: 1,
         max: 20,
-        write: (v) => { comp.ratio.value = clamp(v, 1, 20); },
+        write: (v) => { smoothWrite(comp.ratio, clamp(v, 1, 20)); },
         audioTarget: comp.ratio,
       });
 

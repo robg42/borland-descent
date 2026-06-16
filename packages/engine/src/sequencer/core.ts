@@ -41,8 +41,12 @@ export const eventsInWindow: EventsInWindow = (
   const loopDur = length * secPerStep;
   if (loopDur <= 0) return results;
 
-  // Scan both the loop containing t0 and the one containing t1 (handles boundary).
-  const loopAtStart = Math.floor(windowStartSec / loopDur);
+  // Scan from one loop BEFORE the window start through the loop containing the end.
+  // Swing/humanise push an event PAST its step's grid time, so a late step of loop
+  // N−1 can land inside a window that starts exactly at loop N's boundary — scanning
+  // only the loops containing the raw endpoints would drop it. The strict window
+  // test below dedupes, and the per-loop RNG keeps re-scans deterministic.
+  const loopAtStart = Math.floor(windowStartSec / loopDur) - 1;
   const loopAtEnd = Math.floor((windowEndSec - 1e-9) / loopDur);
 
   for (let loopIdx = loopAtStart; loopIdx <= loopAtEnd; loopIdx++) {

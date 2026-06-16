@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Matrix, restoreDroppedControlTargets } from '../src/modulation/matrix';
+import { Matrix, restoreDroppedControlTargets, routesForScene } from '../src/modulation/matrix';
 import { SignalRegistry } from '../src/core/registry';
 import type { ModulationRoute } from '../src/patch/types';
 import type { PortKind, PortRef } from '../src/core/ports';
@@ -90,6 +90,39 @@ describe('matrix — trigger routes fire decaying envelopes (V2)', () => {
   });
 });
 
+describe('matrix — amount is a fraction of the target port range', () => {
+  it('scales contributions by the target span so wide ports are actually modulatable', () => {
+    const registry = new SignalRegistry();
+    const writes: number[] = [];
+    registry.addOutput('src.out' as PortRef, { kind: 'unipolar', read: () => 1 });
+    // A cutoff-like port: 80–12 080 Hz. With raw-unit amounts (capped at ±1 by the
+    // schema) the strongest possible route moved this by ±1 Hz — inaudible.
+    registry.addInput('voice.cutoff' as PortRef, {
+      kind: 'scalar',
+      base: 800,
+      min: 80,
+      max: 12080,
+      write: (v) => writes.push(v),
+    });
+    const m = new Matrix(
+      [route({ source: 'src.out' as PortRef, target: 'voice.cutoff' as PortRef, amount: 0.5 })],
+      registry,
+    );
+    m.setup();
+    m.evaluateControl(0.016);
+    // base 800 + source 1 × amount 0.5 × span 12 000 = 6 800
+    expect(writes.at(-1)).toBeCloseTo(6800);
+  });
+
+  it('ports without declared bounds keep the legacy 1:1 amount scale', () => {
+    const { registry, writes, source, target } = harness('unipolar', 'scalar', 0.25);
+    const m = new Matrix([route({ source, target, amount: 0.5 })], registry);
+    m.setup();
+    m.evaluateControl(0.016);
+    expect(writes.at(-1)).toBeCloseTo(0.75); // base 0.25 + 1 × 0.5 × span 1
+  });
+});
+
 describe('matrix — deterministic smoothing across routes to one target', () => {
   it('uses the slowest (max) smoothing regardless of route order', () => {
     const { registry, writes, source, target } = harness('unipolar', 'scalar');
@@ -107,6 +140,17 @@ describe('matrix — deterministic smoothing across routes to one target', () =>
     // 'first-wins' would have used 0ms and jumped straight to 1.0.
     expect(writes.at(-1)).toBeLessThan(0.2);
     expect(writes.at(-1)).toBeGreaterThan(0);
+  });
+});
+
+describe('matrix — per-scene route scoping', () => {
+  it('keeps global routes everywhere and tagged routes only in their scene', () => {
+    const routes = [
+      route({ source: 'a.x' as PortRef, target: 'b.y' as PortRef }), // global
+      route({ source: 'a.x' as PortRef, target: 'c.z' as PortRef, sceneId: 'midnight' }),
+    ];
+    expect(routesForScene(routes, 'midnight').map((r) => r.target)).toEqual(['b.y', 'c.z']);
+    expect(routesForScene(routes, 'surface').map((r) => r.target)).toEqual(['b.y']);
   });
 });
 

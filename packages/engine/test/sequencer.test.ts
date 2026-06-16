@@ -106,6 +106,28 @@ describe('eventsInWindow', () => {
     expect(ev.timeSec).toBeCloseTo(0.5, 4);
   });
 
+  it('catches a humanised event pushed past its loop boundary — exactly once', () => {
+    // Loop is 0.5 s; the last step's grid time is 0.375 s. With humanizeMs 200 and a
+    // constant rng of 0.9 the event lands at 0.555 s — inside loop 1's territory.
+    // A scan that only covers the loops containing the window endpoints would never
+    // visit loop 0 for the window [0.5, 0.6) and silently drop the note.
+    const seq = makeSeq({
+      humanizeMs: 200,
+      steps: [
+        { on: false, degree: 0, octave: 0, velocity: 0.8, probability: 1, lengthSteps: 1, ratchet: 1 },
+        { on: false, degree: 0, octave: 0, velocity: 0.8, probability: 1, lengthSteps: 1, ratchet: 1 },
+        { on: false, degree: 0, octave: 0, velocity: 0.8, probability: 1, lengthSteps: 1, ratchet: 1 },
+        { on: true, degree: 0, octave: 0, velocity: 0.8, probability: 1, lengthSteps: 1, ratchet: 1 },
+      ],
+    });
+    const ctx: SequenceWindowContext = { ...CTX, rngForLoop: () => () => 0.9 };
+    const before = eventsInWindow(seq, ctx, 0.4, 0.5); // not yet — 0.555 ≥ window end
+    const after = eventsInWindow(seq, ctx, 0.5, 0.6); // the spilled event, once
+    expect(before.filter((e) => Math.abs(e.timeSec - 0.555) < 1e-6)).toHaveLength(0);
+    expect(after).toHaveLength(1);
+    expect(after[0]!.timeSec).toBeCloseTo(0.555, 6);
+  });
+
   it('produces the same count across N loops (determinism)', () => {
     const loopDur = 0.5;
     const counts: number[] = [];

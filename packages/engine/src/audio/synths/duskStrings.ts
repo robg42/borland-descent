@@ -1,9 +1,11 @@
 import * as Tone from 'tone';
-import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
-import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from './types';
+import {
+  registerFilterTypePort,
+  registerOscTypePort,
+  type SynthModule,
+  type SynthOptions,
+} from './types';
+import { disposeAll, registerVoicePorts, triggerHz } from './helpers';
 
 const CUTOFF_MIN = 120;
 const CUTOFF_MAX = 9000;
@@ -30,61 +32,22 @@ export function createDuskStrings(opts?: SynthOptions): SynthModule {
 
   return {
     output: out,
-    trigger(midi, durationSec, time, velocity) {
-      poly.triggerAttackRelease(midiToFreq(midi), durationSec, time, clamp(velocity, 0, 1));
-    },
-    registerPorts(nodeId, registry: SignalRegistry, params: Record<string, Scalar>) {
-      const baseCutoff = clamp(numParam(params, 'cutoff', 1300), CUTOFF_MIN, CUTOFF_MAX);
-      filter.frequency.value = baseCutoff;
-      registry.addInput(makePortRef(nodeId, 'cutoff'), {
-        kind: 'scalar',
-        base: baseCutoff,
-        min: CUTOFF_MIN,
-        max: CUTOFF_MAX,
-        write: (v) => {
-          filter.frequency.value = clamp(v, CUTOFF_MIN, CUTOFF_MAX);
+    trigger: triggerHz(poly),
+    registerPorts(nodeId, registry, params) {
+      registerVoicePorts(registry, nodeId, params, {
+        cutoff: { param: filter.frequency, min: CUTOFF_MIN, max: CUTOFF_MAX, fallback: 1300 },
+        level: { param: out.gain, fallback: 0.72 },
+        detune: { fallback: 0, apply: (v) => poly.set({ detune: v }) },
+        adsr: {
+          defaults: { attack: 1.8, decay: 1.0, sustain: 0.6, release: 5.0 },
+          setEnv: (env) => poly.set({ envelope: env }),
         },
-        audioTarget: filter.frequency,
       });
-
-      const baseLevel = numParam(params, 'level', 0.72);
-      out.gain.value = baseLevel;
-      registry.addInput(makePortRef(nodeId, 'level'), {
-        kind: 'unipolar',
-        base: baseLevel,
-        min: 0,
-        max: 1.5,
-        write: (v) => {
-          out.gain.value = clamp(v, 0, 1.5);
-        },
-        audioTarget: out.gain,
+      registerOscTypePort(nodeId, registry, params, (type) => poly.set({ oscillator: { type } }));
+      registerFilterTypePort(nodeId, registry, params, (type) => {
+        filter.type = type;
       });
-
-      const baseDetune = numParam(params, 'detune', 0);
-      poly.set({ detune: baseDetune });
-      registry.addInput(makePortRef(nodeId, 'detune'), {
-        kind: 'bipolar',
-        base: baseDetune,
-        write: (v) => poly.set({ detune: clamp(v, -1200, 1200) }),
-      });
-
-      registerAdsrPorts(
-        nodeId,
-        registry,
-        params,
-        { attack: 1.8, decay: 1.0, sustain: 0.6, release: 5.0 },
-        (env) => poly.set({ envelope: env }),
-      );
     },
-    dispose() {
-      poly.dispose();
-      filter.dispose();
-      chorus.dispose();
-      out.dispose();
-    },
+    dispose: disposeAll(poly, filter, chorus, out),
   };
-}
-
-function midiToFreq(midi: number): number {
-  return 440 * Math.pow(2, (midi - 69) / 12);
 }

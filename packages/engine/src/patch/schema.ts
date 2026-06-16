@@ -14,7 +14,9 @@ import { z } from 'zod';
 const pitchClass = z.number().int().min(0).max(11);
 const unipolar = z.number().min(0).max(1);
 const bipolar = z.number().min(-1).max(1);
-const scalar = z.union([z.number(), z.array(z.number())]); // vector ports carry number[]
+// vector ports carry number[]; capped so an imported patch cannot smuggle in a
+// multi-megabyte array (a Patch is authored data, but import is an untrusted path)
+const scalar = z.union([z.number(), z.array(z.number()).max(4096)]);
 
 const idSchema = z
   .string()
@@ -51,12 +53,12 @@ export const ArcKeyframeSchema = z.object({
 export const SeedMotifSchema = z.object({
   intervals: z.array(z.number().int()),
   rhythm: z.array(z.number().positive()),
-  subdivision: z.number().int().positive(),
+  subdivision: z.number().int().positive().max(32),
 });
 export const DnaSchema = z.object({
   rootPitchClasses: z.array(pitchClass).min(1),
   keyCentre: pitchClass,
-  tempoRange: z.tuple([z.number().positive(), z.number().positive()]),
+  tempoRange: z.tuple([z.number().positive().max(300), z.number().positive().max(300)]),
   motif: SeedMotifSchema,
   // models the WHOLE 0..1 range; keyframes must be strictly ascending so macrosAt
   // (which assumes a sorted arc) can never silently mis-interpolate an import.
@@ -115,6 +117,10 @@ export const ModulationRouteSchema = z.object({
   smoothing: z.number().min(0).default(50), // ms, control-rate
   rate: z.enum(['control', 'audio']).default('control'),
   enabled: z.boolean().default(true),
+  /** Scope the route to one scene's wiring (its target port only exists there);
+   *  absent = global. Untagged routes to other scenes' ports are still safely
+   *  dropped — this just states intent and silences the per-scene rebuild noise. */
+  sceneId: idSchema.optional(),
 });
 
 // ---- sequences (schema v2) -------------------------------------------------------
@@ -153,7 +159,7 @@ export const SequenceSchema = z.object({
   /** Steps per loop — variable per sequence. */
   length: z.number().int().min(1).max(64).default(16),
   swing: unipolar.default(0),
-  humanizeMs: z.number().nonnegative().default(0),
+  humanizeMs: z.number().nonnegative().max(250).default(0),
   /** Default gate length as a fraction of one step. */
   gate: unipolar.default(0.8),
   target: SequenceTargetSchema,
@@ -191,7 +197,7 @@ export const SceneAudioParamsSchema = z.object({
     .default({}),
   density: unipolar,
   rhythm: z.object({
-    subdivision: z.number().int().positive(),
+    subdivision: z.number().int().positive().max(32),
     minGapSteps: z.number().int().nonnegative().default(0),
     maxVoicesPerBar: z.number().int().positive().optional(),
   }),
@@ -201,7 +207,10 @@ export const SceneAudioParamsSchema = z.object({
     anchorPc: pitchClass.optional(),
   }),
   reverbSize: unipolar,
-  voices: z.object({ maxPolyphony: z.number().int().positive() }), // applied to the scene's polyphonic synth
+  // applied to the scene's polyphonic synth; capped to the performance budget
+  // (~24 voices on a mid-range phone) so an imported patch cannot allocate an
+  // unbounded voice pool and freeze the tab
+  voices: z.object({ maxPolyphony: z.number().int().positive().max(24) }),
 });
 export const SceneTransitionSchema = z.object({
   kind: z.enum(['crossfade', 'morph', 'none']).default('none'),

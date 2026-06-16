@@ -1,9 +1,6 @@
 import * as Tone from 'tone';
-import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
-import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from './types';
+import { registerFilterTypePort, type SynthModule, type SynthOptions } from './types';
+import { addSetterPort, disposeAll, registerVoicePorts, triggerHz } from './helpers';
 
 const CUTOFF_MIN = 80;
 const CUTOFF_MAX = 6000;
@@ -37,71 +34,36 @@ export function createPressureDrone(opts?: SynthOptions): SynthModule {
 
   return {
     output: out,
-    trigger(midi, durationSec, time, velocity) {
-      poly.triggerAttackRelease(midiToFreq(midi), durationSec, time, clamp(velocity, 0, 1));
-    },
-    registerPorts(nodeId, registry: SignalRegistry, params: Record<string, Scalar>) {
-      const baseCutoff = clamp(numParam(params, 'cutoff', 900), CUTOFF_MIN, CUTOFF_MAX);
-      filter.frequency.value = baseCutoff;
-      registry.addInput(makePortRef(nodeId, 'cutoff'), {
-        kind: 'scalar',
-        base: baseCutoff,
-        min: CUTOFF_MIN,
-        max: CUTOFF_MAX,
-        write: (v) => {
-          filter.frequency.value = clamp(v, CUTOFF_MIN, CUTOFF_MAX);
+    trigger: triggerHz(poly),
+    registerPorts(nodeId, registry, params) {
+      registerVoicePorts(registry, nodeId, params, {
+        cutoff: { param: filter.frequency, min: CUTOFF_MIN, max: CUTOFF_MAX, fallback: 900 },
+        level: { param: out.gain, fallback: 0.7 },
+        adsr: {
+          defaults: { attack: 1.4, decay: 1.2, sustain: 0.65, release: 4.0 },
+          setEnv: (env) => poly.set({ envelope: env }),
         },
-        audioTarget: filter.frequency,
       });
-
-      const baseLevel = numParam(params, 'level', 0.7);
-      out.gain.value = baseLevel;
-      registry.addInput(makePortRef(nodeId, 'level'), {
-        kind: 'unipolar',
-        base: baseLevel,
-        min: 0,
-        max: 1.5,
-        write: (v) => {
-          out.gain.value = clamp(v, 0, 1.5);
-        },
-        audioTarget: out.gain,
-      });
-
-      registerAdsrPorts(
-        nodeId,
-        registry,
-        params,
-        { attack: 1.4, decay: 1.2, sustain: 0.65, release: 4.0 },
-        (env) => poly.set({ envelope: env }),
-      );
-
-      const baseFilterOct = numParam(params, 'filterOctaves', 3.2);
-      poly.set({ filterEnvelope: { octaves: baseFilterOct } });
-      registry.addInput(makePortRef(nodeId, 'filterOctaves'), {
+      addSetterPort(registry, nodeId, 'filterOctaves', params, {
         kind: 'scalar',
-        base: baseFilterOct,
+        fallback: 3.2,
         min: 0,
         max: 6,
-        write: (v) => poly.set({ filterEnvelope: { octaves: clamp(v, 0, 6) } }),
+        apply: (v) => poly.set({ filterEnvelope: { octaves: v } }),
       });
-      const baseWidth = numParam(params, 'width', 0.3);
-      poly.set({ oscillator: { type: 'pulse', width: baseWidth } });
-      registry.addInput(makePortRef(nodeId, 'width'), {
+      addSetterPort(registry, nodeId, 'width', params, {
         kind: 'unipolar',
-        base: baseWidth,
+        fallback: 0.3,
         min: 0,
         max: 1,
-        write: (v) => poly.set({ oscillator: { type: 'pulse', width: clamp(v, 0, 1) } }),
+        apply: (v) => poly.set({ oscillator: { type: 'pulse', width: v } }),
+      });
+      // Only filterType here — the oscillator is a pulse with its own `width` port, so
+      // there is no oscType choice to expose without conflicting with that control.
+      registerFilterTypePort(nodeId, registry, params, (type) => {
+        filter.type = type;
       });
     },
-    dispose() {
-      poly.dispose();
-      filter.dispose();
-      out.dispose();
-    },
+    dispose: disposeAll(poly, filter, out),
   };
-}
-
-function midiToFreq(midi: number): number {
-  return 440 * Math.pow(2, (midi - 69) / 12);
 }

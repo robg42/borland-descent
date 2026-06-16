@@ -1,15 +1,14 @@
 import * as Tone from 'tone';
-import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
-import { numParam, registerAdsrPorts, type SynthModule, type SynthOptions } from './types';
+import {
+  registerFilterTypePort,
+  registerOscTypePort,
+  type SynthModule,
+  type SynthOptions,
+} from './types';
+import { addSetterPort, disposeAll, registerVoicePorts, triggerHz } from './helpers';
 
 const CUTOFF_MIN = 80;
 const CUTOFF_MAX = 12000;
-
-const OSC_TYPES = ['fatsawtooth', 'sawtooth', 'fattriangle', 'triangle', 'fatsquare', 'square', 'sine'] as const;
-const FILTER_TYPES = ['lowpass', 'highpass', 'bandpass', 'notch'] as const;
 
 /**
  * driftPad — warm, slow, polyphonic pad voices destined for the reverb bus.
@@ -48,101 +47,29 @@ export function createDriftPad(opts?: SynthOptions): SynthModule {
 
   return {
     output: out,
-    trigger(midi, durationSec, time, velocity) {
-      poly.triggerAttackRelease(midiToFreq(midi), durationSec, time, clamp(velocity, 0, 1));
-    },
-    registerPorts(nodeId, registry: SignalRegistry, params: Record<string, Scalar>) {
-      const baseCutoff = clamp(numParam(params, 'cutoff', 1400), CUTOFF_MIN, CUTOFF_MAX);
-      filter.frequency.value = baseCutoff;
-      registry.addInput(makePortRef(nodeId, 'cutoff'), {
-        kind: 'scalar',
-        base: baseCutoff,
-        min: CUTOFF_MIN,
-        max: CUTOFF_MAX,
-        write: (v) => {
-          filter.frequency.value = clamp(v, CUTOFF_MIN, CUTOFF_MAX);
+    trigger: triggerHz(poly),
+    registerPorts(nodeId, registry, params) {
+      registerVoicePorts(registry, nodeId, params, {
+        cutoff: { param: filter.frequency, min: CUTOFF_MIN, max: CUTOFF_MAX, fallback: 1400 },
+        level: { param: out.gain, fallback: 0.8 },
+        detune: { fallback: 0, apply: (v) => poly.set({ detune: v }) },
+        adsr: {
+          defaults: { attack: 1.6, decay: 1.0, sustain: 0.8, release: 5 },
+          setEnv: (env) => poly.set({ envelope: env }),
         },
-        audioTarget: filter.frequency,
       });
-
-      const baseLevel = numParam(params, 'level', 0.8);
-      out.gain.value = baseLevel;
-      registry.addInput(makePortRef(nodeId, 'level'), {
-        kind: 'unipolar',
-        base: baseLevel,
-        min: 0,
-        max: 1.5,
-        write: (v) => {
-          out.gain.value = clamp(v, 0, 1.5);
-        },
-        audioTarget: out.gain,
-      });
-
-      const baseDetune = numParam(params, 'detune', 0);
-      poly.set({ detune: baseDetune });
-      registry.addInput(makePortRef(nodeId, 'detune'), {
-        kind: 'bipolar',
-        base: baseDetune,
-        write: (v) => poly.set({ detune: clamp(v, -1200, 1200) }),
-      });
-
-      registerAdsrPorts(
-        nodeId,
-        registry,
-        params,
-        { attack: 1.6, decay: 1.0, sustain: 0.8, release: 5 },
-        (env) => poly.set({ envelope: env }),
-      );
-
-      const baseFilterOct = numParam(params, 'filterOctaves', 3.2);
-      poly.set({ filterEnvelope: { octaves: baseFilterOct } });
-      registry.addInput(makePortRef(nodeId, 'filterOctaves'), {
+      addSetterPort(registry, nodeId, 'filterOctaves', params, {
         kind: 'scalar',
-        base: baseFilterOct,
+        fallback: 3.2,
         min: 0,
         max: 6,
-        write: (v) => poly.set({ filterEnvelope: { octaves: clamp(v, 0, 6) } }),
+        apply: (v) => poly.set({ filterEnvelope: { octaves: v } }),
       });
-
-      // Oscillator type (enum index → string).
-      const baseOscIdx = Math.round(clamp(numParam(params, 'oscType', 0), 0, OSC_TYPES.length - 1));
-      poly.set({ oscillator: { type: OSC_TYPES[baseOscIdx] } });
-      registry.addInput(makePortRef(nodeId, 'oscType'), {
-        kind: 'option',
-        base: baseOscIdx,
-        min: 0,
-        max: OSC_TYPES.length - 1,
-        options: [...OSC_TYPES],
-        write: (v) => {
-          const idx = Math.round(clamp(v, 0, OSC_TYPES.length - 1));
-          poly.set({ oscillator: { type: OSC_TYPES[idx] } });
-        },
-      });
-
-      // Filter type (enum index → string).
-      const baseFilterIdx = Math.round(clamp(numParam(params, 'filterType', 0), 0, FILTER_TYPES.length - 1));
-      filter.type = FILTER_TYPES[baseFilterIdx] as BiquadFilterType;
-      registry.addInput(makePortRef(nodeId, 'filterType'), {
-        kind: 'option',
-        base: baseFilterIdx,
-        min: 0,
-        max: FILTER_TYPES.length - 1,
-        options: [...FILTER_TYPES],
-        write: (v) => {
-          const idx = Math.round(clamp(v, 0, FILTER_TYPES.length - 1));
-          filter.type = FILTER_TYPES[idx] as BiquadFilterType;
-        },
+      registerOscTypePort(nodeId, registry, params, (type) => poly.set({ oscillator: { type } }));
+      registerFilterTypePort(nodeId, registry, params, (type) => {
+        filter.type = type;
       });
     },
-    dispose() {
-      poly.dispose();
-      filter.dispose();
-      chorus.dispose();
-      out.dispose();
-    },
+    dispose: disposeAll(poly, filter, chorus, out),
   };
-}
-
-function midiToFreq(midi: number): number {
-  return 440 * Math.pow(2, (midi - 69) / 12);
 }

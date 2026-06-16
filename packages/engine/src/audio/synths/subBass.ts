@@ -1,9 +1,8 @@
 import * as Tone from 'tone';
 import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
-import { numParam, type SynthModule } from './types';
+import { midiToFreq } from '../../core/music';
+import type { SynthModule } from './types';
+import { addParamPort, disposeAll } from './helpers';
 
 /**
  * subBass — the dry, mono anchor of the low end, in two summed layers:
@@ -52,56 +51,29 @@ export function createSubBass(): SynthModule {
       sub.triggerAttackRelease(f, durationSec, time, v);
       body.triggerAttackRelease(f, durationSec, time, v);
     },
-    registerPorts(nodeId, registry: SignalRegistry, params: Record<string, Scalar>) {
-      const baseLevel = numParam(params, 'level', 0.85);
-      out.gain.value = baseLevel;
-      registry.addInput(makePortRef(nodeId, 'level'), {
+    registerPorts(nodeId, registry, params) {
+      addParamPort(registry, nodeId, 'level', params, {
         kind: 'unipolar',
-        base: baseLevel,
+        fallback: 0.85,
         min: 0,
         max: 1.5,
-        write: (v) => {
-          out.gain.value = clamp(v, 0, 1.5);
-        },
-        audioTarget: out.gain,
+        param: out.gain,
       });
-
-      const baseSub = numParam(params, 'subLevel', 0.85);
-      subGain.gain.value = baseSub;
-      registry.addInput(makePortRef(nodeId, 'subLevel'), {
+      addParamPort(registry, nodeId, 'subLevel', params, {
         kind: 'unipolar',
-        base: baseSub,
+        fallback: 0.85,
         min: 0,
         max: 1.5,
-        write: (v) => {
-          subGain.gain.value = clamp(v, 0, 1.5);
-        },
-        audioTarget: subGain.gain,
+        param: subGain.gain,
       });
-
-      const baseBody = numParam(params, 'bodyLevel', 0.4);
-      bodyGain.gain.value = baseBody;
-      registry.addInput(makePortRef(nodeId, 'bodyLevel'), {
+      addParamPort(registry, nodeId, 'bodyLevel', params, {
         kind: 'unipolar',
-        base: baseBody,
+        fallback: 0.4,
         min: 0,
         max: 1.5,
-        write: (v) => {
-          bodyGain.gain.value = clamp(v, 0, 1.5);
-        },
-        audioTarget: bodyGain.gain,
+        param: bodyGain.gain,
       });
     },
-    dispose() {
-      sub.dispose();
-      body.dispose();
-      subGain.dispose();
-      bodyGain.dispose();
-      out.dispose();
-    },
+    dispose: disposeAll(sub, body, subGain, bodyGain, out),
   };
-}
-
-function midiToFreq(midi: number): number {
-  return 440 * Math.pow(2, (midi - 69) / 12);
 }

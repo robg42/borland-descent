@@ -77,3 +77,67 @@ export function registerAdsrPorts(
     });
   }
 }
+
+/** Basic oscillator shapes offered by the `oscType` option port (index → Tone osc type). */
+export const OSC_TYPES = [
+  'fatsawtooth',
+  'sawtooth',
+  'fattriangle',
+  'triangle',
+  'fatsquare',
+  'square',
+  'sine',
+] as const;
+export type OscTypeName = (typeof OSC_TYPES)[number];
+
+/** Biquad filter shapes offered by the `filterType` option port. */
+export const FILTER_TYPES = ['lowpass', 'highpass', 'bandpass', 'notch'] as const;
+export type FilterTypeName = (typeof FILTER_TYPES)[number];
+
+/**
+ * Register an `oscType` option port — a dropdown of basic oscillator shapes stored as an
+ * integer index (golden rule #4: option kind, so it is editable but excluded from the
+ * modulation matrix). `setType` applies ONLY the type string, so any count/spread the
+ * voice set at construction is preserved by Tone's partial `set`. Voices whose oscillator
+ * carries an inseparable parameter (e.g. a pulse `width`) should not expose this.
+ */
+export function registerOscTypePort(
+  nodeId: string,
+  registry: SignalRegistry,
+  params: Record<string, Scalar>,
+  setType: (type: OscTypeName) => void,
+): void {
+  const base = Math.round(clamp(numParam(params, 'oscType', 0), 0, OSC_TYPES.length - 1));
+  setType(OSC_TYPES[base]!);
+  registry.addInput(makePortRef(nodeId, 'oscType'), {
+    kind: 'option',
+    base,
+    min: 0,
+    max: OSC_TYPES.length - 1,
+    options: [...OSC_TYPES],
+    write: (v) => setType(OSC_TYPES[Math.round(clamp(v, 0, OSC_TYPES.length - 1))]!),
+  });
+}
+
+/**
+ * Register a `filterType` option port — a dropdown of biquad shapes stored as an integer
+ * index. `setType` applies the chosen shape to the voice's shared post-filter. Like
+ * `oscType`, an option-kind port: editable in the studio but not matrix-routable.
+ */
+export function registerFilterTypePort(
+  nodeId: string,
+  registry: SignalRegistry,
+  params: Record<string, Scalar>,
+  setType: (type: FilterTypeName) => void,
+): void {
+  const base = Math.round(clamp(numParam(params, 'filterType', 0), 0, FILTER_TYPES.length - 1));
+  setType(FILTER_TYPES[base]!);
+  registry.addInput(makePortRef(nodeId, 'filterType'), {
+    kind: 'option',
+    base,
+    min: 0,
+    max: FILTER_TYPES.length - 1,
+    options: [...FILTER_TYPES],
+    write: (v) => setType(FILTER_TYPES[Math.round(clamp(v, 0, FILTER_TYPES.length - 1))]!),
+  });
+}

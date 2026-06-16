@@ -1,8 +1,12 @@
 import * as Tone from 'tone';
 
-/** The shape smoothWrite needs — satisfied by both a native AudioParam and a Tone.Param. */
+/**
+ * The shape smoothWrite needs — satisfied by a native AudioParam, a Tone.Param and
+ * Tone's frequency-like Signals (which type `value` as a unit union — Hertz, note
+ * names — though the runtime value is numeric).
+ */
 export interface SmoothableParam {
-  value: number;
+  value: number | string;
   setTargetAtTime(value: number, startTime: number, timeConstant: number): unknown;
 }
 
@@ -15,6 +19,7 @@ export interface SmoothableParam {
  * timeline doesn't accumulate redundant events.
  */
 export function smoothWrite(param: SmoothableParam, value: number, timeConstant = 0.015): void {
-  if (Math.abs(param.value - value) < 1e-6) return;
+  const current = typeof param.value === 'number' ? param.value : Number(param.value);
+  if (Math.abs(current - value) < 1e-6) return;
   param.setTargetAtTime(value, Tone.getContext().currentTime, timeConstant);
 }

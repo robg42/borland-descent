@@ -99,6 +99,9 @@ export class AudioEngine {
   applyArc(position: number): void {
     const m = macrosAt(this.patch.dna.arc, position);
     this.composer.density = m.density;
+    this.composer.macros.darkness = m.darkness;
+    this.composer.macros.dissonance = m.dissonance;
+    this.composer.macros.rhythmicWeight = m.rhythmicWeight;
   }
 
   /** The scene's mixed audio output — the host routes this into the shared master bus.

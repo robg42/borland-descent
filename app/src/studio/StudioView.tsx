@@ -155,6 +155,12 @@ export function StudioView() {
     setReload((r) => r + 1);
   }, []);
 
+  // Stable identity so the memoised FxRackPanel doesn't re-render on every arc tick.
+  const onFxPatchChange = useCallback((next: Patch) => {
+    setPatch(next);
+    setReload((r) => r + 1);
+  }, []);
+
   // Assign a loaded sample as the current scene's voice: point the scene + its 'voices'
   // node at the sampler module and reference the sample by id, then rebuild the engine.
   const assignSample = useCallback(
@@ -352,13 +358,7 @@ export function StudioView() {
           <div className="panel__head">
             <p className="panel__label">fx rack</p>
           </div>
-          <FxRackPanel
-            patch={engine?.patch ?? patch}
-            onPatchChange={(next) => {
-              setPatch(next);
-              setReload((r) => r + 1);
-            }}
-          />
+          <FxRackPanel patch={engine?.patch ?? patch} onPatchChange={onFxPatchChange} />
         </section>
 
         <section className="panel">

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import {
   isCompatible,
   type CurveKind,
@@ -24,7 +25,7 @@ const RATES: RouteRate[] = ['control', 'audio'];
  * Target options are filtered to ports type-compatible with the chosen source, so the
  * table cannot author a route the engine would reject (golden rule §4).
  */
-export function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
+export const MatrixTable = memo(function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
   const update = (i: number, patch: Partial<ModulationRoute>): void => {
     onChange(routes.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   };
@@ -120,6 +121,7 @@ export function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
                   className="field matrix__num"
                   type="number"
                   aria-label="amount"
+                  title="amount — fraction of the target port's range (±1 = the full range)"
                   step={0.05}
                   min={-1}
                   max={1}
@@ -176,7 +178,7 @@ export function MatrixTable({ routes, inputs, outputs, onChange }: Props) {
       </div>
     </div>
   );
-}
+});
 
 /**
  * A stable route id, with a fallback for non-secure contexts — `crypto.randomUUID`

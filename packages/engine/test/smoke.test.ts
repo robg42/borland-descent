@@ -4,6 +4,7 @@ import { Rng } from '../src/core/rng';
 import { decideStep, initComposerState } from '../src/audio/composer/decide';
 import { evaluateControlTargets } from '../src/modulation/evaluate';
 import { macrosAt } from '../src/core/arc';
+import { bpmAt } from '../src/core/music';
 import { applyCurve } from '../src/core/curves';
 import type { CurveKind } from '../src/patch/types';
 import borland from '../../../patches/borland.json';
@@ -63,6 +64,15 @@ describe('headless smoke — pure-logic boot', () => {
       }
       expect(produced).toBeGreaterThan(0); // the scene actually generates material
     }
+  });
+
+  it('the arc-mapped tempo spans the DNA range, fast at the surface', () => {
+    const range = patch.dna.tempoRange;
+    expect(bpmAt(range, 0)).toBe(range[1]); // surface = top of the range
+    expect(bpmAt(range, 1)).toBe(range[0]); // the deep = its floor
+    expect(bpmAt(range, 0.5)).toBeCloseTo((range[0] + range[1]) / 2);
+    expect(bpmAt(range, -3)).toBe(range[1]); // clamped outside [0,1]
+    expect(bpmAt(range, 7)).toBe(range[0]);
   });
 
   it('arc macros are finite and in [0,1] across the whole arc', () => {

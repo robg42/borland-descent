@@ -1,9 +1,7 @@
 import * as Tone from 'tone';
 import { clamp } from '../../core/curves';
-import { makePortRef } from '../../core/ports';
-import type { SignalRegistry } from '../../core/registry';
-import type { Scalar } from '../../patch/schema';
-import { numParam, type SynthModule } from './types';
+import type { SynthModule } from './types';
+import { addParamPort, addSetterPort, disposeAll } from './helpers';
 import { sampleStore, type SampleEntry } from '../sampleStore';
 
 const CUTOFF_MIN = 200;
@@ -47,62 +45,41 @@ export function createSampler(): SynthModule {
       if (!hasSample) return; // nothing loaded → silent, never throws
       sampler.triggerAttackRelease(midiToNote(midi), durationSec, time, clamp(velocity, 0, 1));
     },
-    registerPorts(nodeId, registry: SignalRegistry, params: Record<string, Scalar>) {
-      const baseLevel = numParam(params, 'level', 0.8);
-      out.gain.value = baseLevel;
-      registry.addInput(makePortRef(nodeId, 'level'), {
+    registerPorts(nodeId, registry, params) {
+      addParamPort(registry, nodeId, 'level', params, {
         kind: 'unipolar',
-        base: baseLevel,
+        fallback: 0.8,
         min: 0,
         max: 1.5,
-        write: (v) => {
-          out.gain.value = clamp(v, 0, 1.5);
-        },
-        audioTarget: out.gain,
+        param: out.gain,
       });
-
-      const baseCutoff = clamp(numParam(params, 'cutoff', 9000), CUTOFF_MIN, CUTOFF_MAX);
-      filter.frequency.value = baseCutoff;
-      registry.addInput(makePortRef(nodeId, 'cutoff'), {
+      addParamPort(registry, nodeId, 'cutoff', params, {
         kind: 'scalar',
-        base: baseCutoff,
+        fallback: 9000,
         min: CUTOFF_MIN,
         max: CUTOFF_MAX,
-        write: (v) => {
-          filter.frequency.value = clamp(v, CUTOFF_MIN, CUTOFF_MAX);
-        },
-        audioTarget: filter.frequency,
+        param: filter.frequency,
       });
-
-      const baseAttack = numParam(params, 'attack', 0.02);
-      sampler.attack = baseAttack;
-      registry.addInput(makePortRef(nodeId, 'attack'), {
+      addSetterPort(registry, nodeId, 'attack', params, {
         kind: 'scalar',
-        base: baseAttack,
+        fallback: 0.02,
         min: 0,
         max: 4,
-        write: (v) => {
-          sampler.attack = clamp(v, 0, 4);
+        apply: (v) => {
+          sampler.attack = v;
         },
       });
-
-      const baseRelease = numParam(params, 'release', 1.2);
-      sampler.release = baseRelease;
-      registry.addInput(makePortRef(nodeId, 'release'), {
+      addSetterPort(registry, nodeId, 'release', params, {
         kind: 'scalar',
-        base: baseRelease,
+        fallback: 1.2,
         min: 0,
         max: 8,
-        write: (v) => {
-          sampler.release = clamp(v, 0, 8);
+        apply: (v) => {
+          sampler.release = v;
         },
       });
     },
-    dispose() {
-      sampler.dispose();
-      filter.dispose();
-      out.dispose();
-    },
+    dispose: disposeAll(sampler, filter, out),
   };
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import {
   EFFECT_PRESETS,
   PROTECTED_NODE_IDS,
@@ -47,7 +47,7 @@ function chainBetween(
  * nodes. Topology changes rebuild the engine (the caller passes `onPatchChange`
  * which StudioView routes to `setPatch + setReload`).
  */
-export function FxRackPanel({ patch, onPatchChange }: Props) {
+export const FxRackPanel = memo(function FxRackPanel({ patch, onPatchChange }: Props) {
   const [selPreset, setSelPreset] = useState(0);
   const [insertBefore, setInsertBefore] = useState('glue');
 
@@ -120,7 +120,7 @@ export function FxRackPanel({ patch, onPatchChange }: Props) {
       <ChainView label="bass" chain={bassChain} nodes={nodes} onRemove={removeNode} />
     </div>
   );
-}
+});
 
 interface ChainViewProps {
   label: string;

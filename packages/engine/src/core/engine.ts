@@ -2,12 +2,14 @@ import type { Patch, Scene, ModulationRoute } from '../patch/schema';
 import type { EngineOptions } from './types';
 import * as Tone from 'tone';
 import { Transport } from './transport';
-import { unlockAudio, resumeAudio, isAudioRunning } from '../audio/context';
+import { unlockAudio, resumeAudio, isAudioRunning, audioContextState } from '../audio/context';
 import { SignalRegistry, type InputPortInfo, type OutputPortInfo } from './registry';
 import { Rng } from './rng';
 import { makePortRef, parsePortRef, type PortRef } from './ports';
 import { macrosAt } from './arc';
-import { Matrix, restoreDroppedControlTargets } from '../modulation/matrix';
+import { bpmAt } from './music';
+import type { ArcMacros } from '../patch/types';
+import { Matrix, restoreDroppedControlTargets, routesForScene } from '../modulation/matrix';
 import { GestureController } from '../gesture/gesture';
 import { SceneInstance } from './sceneInstance';
 import { VisualHost, type MountArgs } from '../visual/host';
@@ -57,6 +59,13 @@ export class Engine {
   /** In-flight programmatic arc glide (double-tap → next scene). */
   private glide: { from: number; to: number; t: number; dur: number } | null = null;
 
+  // ---- arc-driven tempo drift ----
+  // The target BPM follows the arc (bpmAt); a slow one-pole (~2.5 s) means scrubbing
+  // the arc never jerks the transport. Writes are thresholded so the TickSignal isn't
+  // touched every frame, and each write refreshes the sequencer's musical context.
+  private bpmCurrent = 60;
+  private bpmWritten = 60;
+
   // ---- crossfade state (§18.2) ----
   private transitioning = false;
   private incoming: SceneInstance | null = null;
@@ -102,8 +111,10 @@ export class Engine {
       ? this.coveringScene(this.manualArc)
       : Math.min(opts.patch.scenes.length - 1, Math.max(0, opts.sceneIndex ?? 0));
 
-    const [minBpm, maxBpm] = this.patch.dna.tempoRange;
-    this.transport.setBpm((minBpm + maxBpm) / 2);
+    // Arc-mapped tempo (dna.tempoRange): fast at the surface, slow in the deep.
+    // The loop drifts it smoothly as the arc moves; this seeds the starting value.
+    this.bpmCurrent = this.bpmWritten = bpmAt(this.patch.dna.tempoRange, this.manualArc);
+    this.transport.setBpm(this.bpmCurrent);
 
     // The arc position is itself a modulation SOURCE (arc.darkness, …), read live each
     // frame — so routes can drive anything from the descent. Host-level: re-registered
@@ -125,9 +136,31 @@ export class Engine {
     }
   }
 
+  /** macrosAt allocates a fresh object; it is read up to ~8×/frame (host setArc,
+   *  six arc ports, applyArc), so memoise on the position — one alloc per change. */
+  private macroCache: { pos: number; macros: ArcMacros } | null = null;
+  private macros(position: number): ArcMacros {
+    if (this.macroCache?.pos === position) return this.macroCache.macros;
+    const macros = macrosAt(this.patch.dna.arc, position);
+    this.macroCache = { pos: position, macros };
+    return macros;
+  }
+
   /** Arc darkness at a position — the structural driver every visual layer reads. */
   private darkness(position: number): number {
-    return macrosAt(this.patch.dna.arc, position).darkness;
+    return this.macros(position).darkness;
+  }
+
+  /** Drift the transport tempo toward the arc-mapped target (called from both loops). */
+  private updateTempo(dt: number, pos: number): void {
+    const target = bpmAt(this.patch.dna.tempoRange, pos);
+    this.bpmCurrent += (target - this.bpmCurrent) * (1 - Math.exp(-dt / 2.5));
+    if (Math.abs(this.bpmCurrent - this.bpmWritten) > 0.1) {
+      this.bpmWritten = this.bpmCurrent;
+      this.transport.setBpm(this.bpmCurrent);
+      // Sequences compute their grid from ctx.bpm — keep it in step with the clock.
+      this.sequencer?.updateContext(this.seqCtx(this.activeIndex));
+    }
   }
 
   /** Assemble a scene's VisualHost mount: module id, merged params, post grade. */
@@ -202,7 +235,7 @@ export class Engine {
     for (const key of keys) {
       registry.addOutput(makePortRef('arc', key), {
         kind: 'unipolar',
-        read: () => macrosAt(this.patch.dna.arc, this.arcPosition)[key],
+        read: () => this.macros(this.arcPosition)[key],
       });
     }
     // perf.frameMs — the renderer's EMA frame time; readable by the matrix / studio.
@@ -326,8 +359,9 @@ export class Engine {
     this.incomingReady = false;
     this.transitioning = false;
     this.active.setLevel(1);
-    this.matrix = new Matrix(this.routes, this.registry);
+    this.matrix = new Matrix(routesForScene(this.routes, this.scene.id), this.registry);
     this.matrix.setup();
+    this.sequencer?.setRegistry(this.registry); // port tracks follow the handover
   }
 
   /** Abandon an in-flight crossfade (build failure) — keep the outgoing scene. */
@@ -359,18 +393,19 @@ export class Engine {
     this.active ??= this.makeScene(this.activeIndex, this.registry);
     await this.active.build(); // builds the scene's audio + registers its ports
     this.active.output?.connect(this.masterBus); // scene → shared master → speakers
-    this.matrix = new Matrix(this.routes, this.registry);
+    this.matrix = new Matrix(routesForScene(this.routes, this.scene.id), this.registry);
     this.matrix.setup();
     this.transport.start();
     this.active.startComposer();
     // Start the sequencer — plays any authored sequences in the patch.
     if (this.patch.sequences.length > 0) {
-      const activeScene = this.active;
       this.sequencer = new Sequencer({
         sequences: this.patch.sequences,
         transport: this.transport,
         registry: this.registry,
-        getSynth: (nodeId) => activeScene.getSynth(nodeId),
+        // Resolve through the engine each time: after a crossfade `this.active` is a
+        // NEW SceneInstance — a captured reference would trigger disposed synths.
+        getSynth: (nodeId) => this.active?.getSynth(nodeId) ?? null,
         ctx: this.seqCtx(this.activeIndex),
       });
       this.sequencer.start();
@@ -381,6 +416,10 @@ export class Engine {
       document.addEventListener('visibilitychange', this.onVisibilityChange);
     }
     this.startLoop();
+    // If start() ran while the tab was already hidden (begin → instant app switch),
+    // no visibilitychange will fire and rAF never ticks — engage the hidden-tab
+    // fallback now so audio handover and modulation don't silently stall.
+    this.onVisibilityChange();
   }
 
   play(): void {
@@ -397,6 +436,11 @@ export class Engine {
   }
   get audioRunning(): boolean {
     return isAudioRunning();
+  }
+  /** Raw context state string ('running' | 'suspended' | …) — exposed here so app
+   *  code never needs a static import that drags Tone into the entry chunk. */
+  get audioState(): string {
+    return audioContextState();
   }
   async resume(): Promise<boolean> {
     return resumeAudio();
@@ -434,12 +478,11 @@ export class Engine {
       this.sequencer.updateSequences(sequences);
     } else if (sequences.length > 0 && this.active && this.running) {
       // Sequences were added after start() — spin up the scheduler now.
-      const activeScene = this.active;
       this.sequencer = new Sequencer({
         sequences,
         transport: this.transport,
         registry: this.registry,
-        getSynth: (nodeId) => activeScene.getSynth(nodeId),
+        getSynth: (nodeId) => this.active?.getSynth(nodeId) ?? null,
         ctx: this.seqCtx(this.activeIndex),
       });
       this.sequencer.start();
@@ -453,7 +496,7 @@ export class Engine {
     if (this.matrix) {
       const before = this.matrix.controlTargets();
       this.matrix.dispose();
-      this.matrix = new Matrix(routes, this.registry);
+      this.matrix = new Matrix(routesForScene(routes, this.scene.id), this.registry);
       this.matrix.setup();
       // any input that lost all its control routes must relax back to base,
       // otherwise it stays frozen at its last modulated value.
@@ -502,6 +545,7 @@ export class Engine {
       this.advanceCrossfade(dt);
       this.active?.applyArc(pos);
       this.incoming?.applyArc(pos);
+      if (this.running) this.updateTempo(dt, pos);
       this.active?.tick(dt); // refresh audio features before the matrix reads them
       this.incoming?.tick(dt);
       this.host?.setArc(this.darkness(pos));
@@ -526,9 +570,17 @@ export class Engine {
       const now = Date.now();
       const dt = Math.min((now - this.lastBgTs) / 1000, 0.5);
       this.lastBgTs = now;
+      const pos = this.arcPosition;
+      // Audio keeps playing while hidden, so scene handover must too — without this
+      // the soundscape stays in the old scene however far the arc has moved.
+      if (this.autoScene && this.running && !this.transitioning) {
+        const target = this.sceneIndexForArc(pos);
+        if (target !== this.activeIndex) void this.beginCrossfade(target);
+      }
       this.advanceCrossfade(dt);
-      this.active?.applyArc(this.arcPosition);
-      this.incoming?.applyArc(this.arcPosition);
+      this.active?.applyArc(pos);
+      this.incoming?.applyArc(pos);
+      this.updateTempo(dt, pos);
       this.matrix?.evaluateControl(dt);
     }, 250); // ~4 Hz
   }
