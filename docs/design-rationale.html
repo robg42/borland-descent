@@ -479,7 +479,7 @@
         <div><b>Author</b><span>Rob</span></div>
         <div><b>Reader</b><span>Ian</span></div>
         <div><b>Scope</b><span>v1 · the loop</span></div>
-        <div><b>Updated</b><span>10 Jun 2026</span></div>
+        <div><b>Updated</b><span>29 Jun 2026</span></div>
       </div>
     </div>
     <div class="masthead__cue"><span class="arrow">↓</span> scroll to descend</div>
@@ -730,7 +730,7 @@
       <p>In the studio you can move a slider or rewire the matrix and hear it immediately, without the audio cutting out. Edits flow through engine methods (<code>setInputBase</code>, <code>setRoutes</code>, <code>setSequences</code>) that mutate the running graph in place and keep the working patch in sync for export. The React lifecycle is keyed so ordinary edits do <em>not</em> tear the engine down — only a structural change (importing a patch, switching to a structurally different scene) bumps a <code>reloadToken</code> to force a clean rebuild.</p>
 
       <h3><span class="h3-mark">→</span>The engine as a host; a scene as a unit</h3>
-      <p>The engine does not own a scene's audio and visuals directly — it <em>hosts</em> them. A <code>SceneInstance</code> bundles one scene's audio graph and visual stack and registers their ports; the <code>Engine</code> keeps only the shared, scene-independent concerns — the one transport, the gesture input, the port registry, the modulation matrix and a single master bus — and drives the active instance each frame. Each scene feeds that master through <em>its own output gain</em>; today exactly one does. But that is precisely what turns the two deferred features needing a scene to be a movable unit — a crossfade that runs two scenes at once, and an arc that hands off from one scene to the next — into the host holding a <em>second</em> instance and ramping the two gains against each other, rather than a rewrite of the engine's core. Draw the line before code leans on the engine owning a single scene, not after.</p>
+      <p>The engine does not own a scene's audio and visuals directly — it <em>hosts</em> them. A <code>SceneInstance</code> bundles one scene's <strong>audio graph only</strong> and registers its audio ports into the shared registry; the visual layer it contributes lives in the shared <code>VisualHost</code> — one renderer for the whole engine — so <code>SceneInstance</code> is audio-only. The <code>Engine</code> keeps only the shared, scene-independent concerns — the one transport, the gesture input, the port registry, the modulation matrix and a single master bus — and drives the active instance each frame. Each scene feeds that master through <em>its own output gain</em>. During a crossfade (§18.2) the host holds <em>both</em> the outgoing and incoming <code>SceneInstance</code> simultaneously, ramping their gains against each other with equal-power curves while the <code>VisualHost</code> blends their layers in a single blend pass — two scenes, two registries, one pipeline. Separate registries keep the outgoing and incoming scenes' ports from colliding during the fade; when it completes the incoming registry becomes active and the matrix rewires. Draw the line before code leans on the engine owning a single scene, not after.</p>
 
       <h3><span class="h3-mark">→</span>The audio lifecycle, and the still first frame</h3>
       <p>There is exactly one <code>AudioContext</code> for the page — Tone owns it, and we never construct a second (Safari caps them at roughly four). It can only be unlocked from a user gesture, so the player opens on a <em>still, inviting first frame</em>: visuals and gesture are built up front and rendered once; audio is built only when you tap to begin. On iOS the context can be interrupted by backgrounding, so there is an explicit “tap to resume” path. These are the difference between “it works on my laptop” and “it works on a phone on the train”.</p>
@@ -777,12 +777,12 @@
           <div class="ledger__seam">The <b>PatchStore</b> interface already has the shape a live backend needs (<code>load / save / list / subscribe</code>). v1's <code>JsonPatchStore</code> and a later Convex store are interchangeable; nothing above the seam changes.</div>
         </div>
         <div class="ledger__row">
-          <div class="ledger__what">Scene-to-scene transitions <span class="tag-defer">deferred</span></div>
-          <div class="ledger__seam">The Patch schema <b>already models a <code>SceneTransition</code></b> (crossfade / morph / none, with duration), and the runtime now has the unit it needs: the engine hosts a self-contained <b><code>SceneInstance</code></b>. A crossfade becomes the host holding a second instance and ramping a blend — not a re-plumb.</div>
+          <div class="ledger__what">Scene-to-scene transitions <span class="tag-done">shipped</span></div>
+          <div class="ledger__seam">The Patch schema <b>models a <code>SceneTransition</code></b> (crossfade / morph / none, with duration). The §18.2 crossfade is now live: the engine holds the outgoing and incoming <b><code>SceneInstance</code></b> simultaneously, ramps their audio gains with equal-power curves, and the <code>VisualHost</code> blends their layers in a single blend pass. Separate registries prevent port collision during the fade; at completion the incoming registry becomes active and the matrix rewires. What remains deferred is the <em>morph</em> kind (parameter interpolation across the fade) — the seam already models it.</div>
         </div>
         <div class="ledger__row">
           <div class="ledger__what">The seven-scene arc, played end-to-end <span class="tag-done">shipped</span></div>
-          <div class="ledger__seam">The seven scenes are <b>authored</b> — each a distinct synth + shader module tiling its <b><code>arcRange</code></b> slice from surface to trench — and <b>§18.1 arc-driven traversal</b> now plays them: in the player the arc position selects the scene, swapping the active <code>SceneInstance</code> in place as you descend (one scene live at a time, so ports never collide; the studio keeps manual selection). The one rough edge — a brief gap while the next scene's reverb builds — is what the boundary <em>crossfade</em> above smooths next.</div>
+          <div class="ledger__seam">The seven scenes are <b>authored</b> — each a distinct synth + shader module tiling its <b><code>arcRange</code></b> slice from surface to trench — and both <b>§18.1 arc-driven traversal</b> and <b>§18.2 crossfade</b> now play them: in the player the arc position selects the scene, and as you cross a boundary the engine holds both the outgoing and incoming <code>SceneInstance</code> simultaneously (two separate registries, so ports never collide) while it ramps audio and blends visuals over the transition duration. The studio keeps manual scene selection.</div>
         </div>
         <div class="ledger__row">
           <div class="ledger__what">Accounts, hosting, sharing <span class="tag-defer">deferred</span></div>
@@ -828,21 +828,34 @@
         </div>
       </div>
 
-      <p>The single zoom gesture (drag, scroll or pinch on the preview) moves you through the arc; the world changes because you touched it, not because you found a dial. Seven modulation routes wire the domains together — note they run <em>both</em> ways, and that the arc position is itself a source (its macros are output ports), so the tape degradation — pitch drift and hiss — deepens as you descend:</p>
+      <p>The single zoom gesture (drag, scroll or pinch on the preview) moves you through the arc; the world changes because you touched it, not because you found a dial. Twenty modulation routes wire the domains together — note they run <em>both</em> ways, that the arc position is itself a source (its macros are output ports), that spectral bands and the onset detector feed the visual layers directly, and that the tape degradation — pitch drift and hiss — deepens as you descend:</p>
 
       <table class="routes">
         <thead><tr><th>Source</th><th>Target</th><th>Curve</th><th>Direction · rate</th></tr></thead>
         <tbody>
           <tr><td><code>gesture.zoomDepth</code></td><td><code>voices.cutoff</code></td><td>exp</td><td class="dir">gesture → audio · control</td></tr>
-          <tr><td><code>bassMeter.level</code></td><td><code>field.fog</code></td><td>sCurve</td><td class="dir">audio → visual · control</td></tr>
-          <tr><td><code>fft.low</code></td><td><code>field.flow</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
-          <tr><td><code>masterMeter.level</code></td><td><code>bloom.strength</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
           <tr><td><code>arc.darkness</code></td><td><code>drift.depth</code></td><td>linear</td><td class="dir">arc → audio · control</td></tr>
           <tr><td><code>arc.darkness</code></td><td><code>tape.hiss</code></td><td>linear</td><td class="dir">arc → audio · control</td></tr>
+          <tr><td><code>bassMeter.level</code></td><td><code>field.fog</code></td><td>sCurve</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>bassMeter.level</code></td><td><code>field.pulse</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>bassMeter.level</code></td><td><code>field.maw</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>bassMeter.level</code></td><td><code>field.shafts</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>fft.low</code></td><td><code>field.flow</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>fft.low</code></td><td><code>field.presence</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>fft.mid</code></td><td><code>field.refract</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>fft.high</code></td><td><code>field.glint</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>fft.high</code></td><td><code>field.flicker</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>masterMeter.level</code></td><td><code>bloom.strength</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>masterMeter.level</code></td><td><code>field.glint</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>masterMeter.level</code></td><td><code>field.lume</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>masterMeter.level</code></td><td><code>field.sonar</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>masterMeter.level</code></td><td><code>field.glow</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>audio.flux</code></td><td><code>field.glint</code></td><td>linear</td><td class="dir">spectral flux → visual · control</td></tr>
+          <tr><td><code>audio.onset</code></td><td><code>field.flicker</code></td><td>linear</td><td class="dir">trigger → visual · control</td></tr>
           <tr class="r-audio"><td><code>wobble.out</code></td><td><code>voices.cutoff</code></td><td>linear</td><td class="dir">LFO → audio · audio-rate</td></tr>
         </tbody>
       </table>
-      <p class="footnote">That last row is the only audio-rate route — a wobble LFO wired natively into the filter cutoff, never touched per frame — sharing its target with a control-rate gesture route. A small but complete demonstration of Rule&nbsp;6: two routes, two rates, one target, kept rigorously apart.</p>
+      <p class="footnote">The last row is the only audio-rate route — a wobble LFO wired natively into the filter cutoff, never touched per frame — sharing its target with a control-rate gesture route: a small but complete demonstration of Rule&nbsp;6: two routes, two rates, one target, kept rigorously apart. The trigger row (<code>audio.onset</code>) follows the asymmetry described in §4: the onset pulse is converted to a decaying control-rate envelope, bypassing per-target smoothing so the attack stays instant.</p>
     </section>
 
     <!-- 08 -->
@@ -864,7 +877,7 @@
         <div class="filemap__row"><code>packages/engine/src/patch/schema.ts</code><span>The Patch — zod, canonical; types inferred from it.</span></div>
         <div class="filemap__row"><code>packages/engine/src/patch/store.ts</code><span>The persistence seam (Rule 3).</span></div>
         <div class="filemap__row"><code>packages/engine/src/core/engine.ts</code><span>The engine — host, frame loop, live-edit surface.</span></div>
-        <div class="filemap__row"><code>packages/engine/src/core/sceneInstance.ts</code><span>One scene's audio + visual, hosted by the engine — the transition seam.</span></div>
+        <div class="filemap__row"><code>packages/engine/src/core/sceneInstance.ts</code><span>One scene's audio, hosted by the engine — visual layers live in <code>VisualHost</code>; the transition seam.</span></div>
         <div class="filemap__row"><code>packages/engine/src/core/ports.ts</code><span>Typed ports and the compatibility rule (Rule 4).</span></div>
         <div class="filemap__row"><code>packages/engine/src/modulation/matrix.ts</code><span>The matrix — the control/audio-rate split (Rule 6).</span></div>
         <div class="filemap__row"><code>packages/engine/src/core/transport.ts</code><span>The one shared clock (Rule 5).</span></div>
