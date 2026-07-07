@@ -1,5 +1,4 @@
 import type { Pass } from 'three/addons/postprocessing/Pass.js';
-import type { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { clamp } from '../core/curves';
 import { makePortRef } from '../core/ports';
 import type { SignalRegistry } from '../core/registry';
@@ -73,6 +72,12 @@ export function descriptorUniforms(
   return uniforms;
 }
 
+/** Anything holding a uniform map — a ShaderPass, or a custom Pass (e.g. a
+ *  feedback/ping-pong module) exposing the uniform objects its materials share. */
+export interface UniformHost {
+  uniforms: Record<string, { value: unknown }>;
+}
+
 /**
  * The generic binder: register every descriptor param as a modulatable input
  * port writing its uniform, seeded from the merged patch/scene params. Replaces
@@ -80,7 +85,7 @@ export function descriptorUniforms(
  */
 export function bindDescriptorPorts(
   descriptor: VisualModuleDescriptor,
-  pass: ShaderPass,
+  pass: UniformHost,
   nodeId: string,
   registry: SignalRegistry,
   params: Record<string, Scalar>,

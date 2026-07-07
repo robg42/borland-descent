@@ -18,12 +18,20 @@ import { createHenke } from './henke';
 import { createLemercier } from './lemercier';
 import { createRickards } from './rickards';
 import { createAsendorf } from './asendorf';
+import { createChladni } from './chladni';
+import { createSuminagashi } from './suminagashi';
+import { createSonar } from './sonar';
+import { createReef } from './reef';
 import type { VisualLayer, VisualLayerFactory } from './types';
 
 /** Registry of visual layer modules by id. Scenes select their world by these keys.
  *  The first seven are the descent's scenes; signal/swarm/beams are the V3
  *  technique-family modules; the artist series (V3.1) translates ten named
- *  generative artists into further families (N = 20) — all studio-selectable. */
+ *  generative artists into further families; the phenomena series (V3.2)
+ *  translates four physical processes — sound made visible (cymatics), ink on
+ *  water (marbling), sound in water (echolocation) and chemistry growing form
+ *  (reaction–diffusion, the roster's first feedback module) — N = 24, all
+ *  studio-selectable. */
 const FACTORIES: Record<string, VisualLayerFactory> = {
   oceanicField: createOceanicField,
   abyss: createAbyss,
@@ -46,6 +54,11 @@ const FACTORIES: Record<string, VisualLayerFactory> = {
   lemercier: createLemercier, // Joanie Lemercier — projected landform
   rickards: createRickards, // Paul Rickards — moiré interference gratings
   asendorf: createAsendorf, // Kim Asendorf — pixel sorting
+  // the phenomena series — ids name the process each family is translated from
+  chladni: createChladni, // Chladni figures — sand on a bowed plate
+  suminagashi: createSuminagashi, // suminagashi — ink rings combed on still water
+  sonar: createSonar, // echolocation — a phosphor sweep and what answers it
+  reef: createReef, // Gray–Scott reaction–diffusion — a grown, remembering reef
 };
 
 export function createLayer(moduleId: string): VisualLayer {
