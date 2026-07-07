@@ -453,6 +453,10 @@ export class Engine {
   get audioState(): string {
     return audioContextState();
   }
+  /** Live transport tempo (the arc drifts it) — read-only, for studio readouts. */
+  get bpm(): number {
+    return this.transport.bpm;
+  }
   async resume(): Promise<boolean> {
     return resumeAudio();
   }

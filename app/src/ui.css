@@ -25,6 +25,7 @@ body {
   color: var(--ink);
   font-family: var(--font-mono);
   background: var(--bg);
+  accent-color: var(--accent); /* native checkboxes/ranges take the teal */
 }
 
 /* ---- Player ---------------------------------------------------------------- */
@@ -213,52 +214,53 @@ body {
   border-bottom-color: var(--accent);
 }
 
-/* ---- Studio controls ------------------------------------------------------- */
-/* A sticky stage (live preview + transport) pinned to the top, with the editing
-   panels scrolling beneath — so you see and hear changes as you make them. */
-.studio__stage {
+/* ---- Studio console ---------------------------------------------------------
+   A two-pane workstation: the RAIL (left, sticky) is the instrument — live
+   preview, transport, gauge cluster, scene identity. The BENCH (right) is a
+   tabbed workbench where exactly one editor mounts at a time, taking the full
+   remaining width. Narrow screens stack: compact rail on top, tab strip pinned. */
+.studio__workspace {
+  display: grid;
+  grid-template-columns: minmax(17rem, 21.5rem) minmax(0, 1fr);
+  align-items: start;
+}
+.studio__rail {
   position: sticky;
   top: 0;
-  z-index: 10;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 1.1rem 1.5rem;
-  padding: 1rem 1.3rem 1.15rem;
-  background: rgba(4, 7, 10, 0.93);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--hairline);
-}
-.studio__stageControls {
-  flex: 1 1 15rem;
-  min-width: 13rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding-top: 0.15rem;
+  padding: 1.1rem 1.25rem 1.4rem;
+  max-height: 100dvh;
+  overflow-y: auto;
+  border-right: 1px solid var(--hairline);
+  scrollbar-width: thin;
 }
-.studio__panels {
+.studio__bench {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
-  padding: 1.3rem;
-  max-width: 56rem;
+  gap: 1rem;
+  padding: 0 1.4rem 2.5rem;
 }
+.panel--bench {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top: 0; /* the tab strip's underline is the panel's top edge */
+  margin-top: -1rem; /* cancel the bench gap so the panel sits flush under the strip */
+}
+
 .studio__preview {
   position: relative;
-  flex: 0 0 auto;
-  height: min(46vh, 30rem);
+  align-self: center;
+  height: min(38vh, 26rem);
   aspect-ratio: 9 / 16;
+  max-width: 100%;
   border: 1px solid var(--hairline);
   border-radius: 4px;
   overflow: hidden;
   background: #000;
-}
-@media (max-width: 640px) {
-  .studio__preview {
-    height: 34vh;
-  }
+  box-shadow: 0 0 42px rgba(121, 199, 190, 0.05), 0 18px 40px rgba(0, 0, 0, 0.55);
 }
 .studio__previewLabel {
   position: absolute;
@@ -270,6 +272,139 @@ body {
   text-transform: uppercase;
   color: var(--ink-dim);
   pointer-events: none;
+}
+
+/* the gauge cluster — depth / zone / tempo, an instrument readout */
+.gauges {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+.gauge {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.42rem 0.1rem;
+}
+.gauge + .gauge {
+  border-top: 1px solid var(--hairline);
+}
+.gauge__label {
+  font-size: 0.56rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.gauge__value {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gauge__value em {
+  font-style: normal;
+  font-size: 0.6rem;
+  color: var(--ink-faint);
+  margin-left: 0.3em;
+  letter-spacing: 0.12em;
+}
+.gauge__value--name {
+  color: var(--ink);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+
+.rail__pickers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.rail__picker {
+  display: grid;
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+}
+.rail__pickerLabel {
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* the workbench tab strip */
+.tabs {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 0.15rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 0 0;
+  border-bottom: 1px solid var(--hairline);
+  background: linear-gradient(180deg, var(--bg-2), rgb(6, 10, 13));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.tab {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 0;
+  padding: 0.5rem 0.7rem 0.6rem;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.tab:hover {
+  color: var(--ink);
+}
+.tab--sel {
+  color: var(--accent);
+  background: linear-gradient(180deg, transparent, rgba(121, 199, 190, 0.07));
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+  text-shadow: 0 0 14px rgba(121, 199, 190, 0.45);
+}
+
+.matrix-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 880px) {
+  .studio__workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .studio__rail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .studio__preview {
+    height: 30vh;
+  }
+  .studio__bench {
+    padding: 0 1rem 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .studio__rail {
+    animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .studio__bench {
+    animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 0.12s both;
+  }
 }
 
 .panel__head {
@@ -441,6 +576,20 @@ input.field {
 }
 .transport__arc input[type='range'] {
   margin: 0;
+}
+.transport__arc .ctl__name {
+  flex: none; /* never ellipsise the three-letter label into “a…” */
+}
+
+/* scene parameters flow into columns on a wide bench — one sparse full-width
+   column of sliders wastes the workstation; node groups stay atomic */
+.params {
+  columns: 22rem;
+  column-gap: 2.6rem;
+}
+.params__node {
+  break-inside: avoid-column;
+  margin-bottom: 0.55rem;
 }
 .hint {
   font-size: 0.68rem;

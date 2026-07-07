@@ -132,7 +132,7 @@ export const SceneParams = memo(function SceneParams({ engine, inputs, patch, on
   const audioReady = byCategory.has('synth');
 
   return (
-    <div>
+    <div className="params">
       {!audioReady && (
         <p className="hint" style={{ marginBottom: '0.4rem' }}>
           Press begin — the synth, effects and mix load with the audio.
@@ -142,7 +142,7 @@ export const SceneParams = memo(function SceneParams({ engine, inputs, patch, on
         <div key={c.key}>
           <p style={CAT_STYLE}>{c.label}</p>
           {byCategory.get(c.key)!.map(([node, ports]) => (
-            <div key={node} style={{ marginBottom: '0.2rem' }}>
+            <div key={node} className="params__node">
               <p style={NODE_STYLE}>{node}</p>
               {ports.map(ctl)}
             </div>

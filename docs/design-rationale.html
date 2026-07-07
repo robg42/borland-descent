@@ -752,7 +752,7 @@
         <li>voices are capped (~24) and the FFT size kept small (512–1024);</li>
         <li>the frame loop suspends when the tab is backgrounded, to save battery — a ~4&nbsp;Hz fallback tick keeps audio handover, tempo drift and modulation alive while hidden (and engages even if the engine <em>starts</em> hidden);</li>
         <li><code>prefers-reduced-motion</code> is honoured — when set, the visual time is frozen so the picture holds still rather than animating;</li>
-        <li>the entry bundle carries only React and the player shell (~60&nbsp;kB gzip): tone + three live in a separate chunk reached ONLY by dynamic import, loading behind the veil instead of blocking first paint, and the studio is a lazy route a listener never downloads.</li>
+        <li>the entry bundle carries only React and the player shell (~60&nbsp;kB gzip): tone, three and the engine are three separate vendor/code chunks reached ONLY by dynamic import — they fetch in parallel behind the veil instead of blocking first paint, engine-code changes never invalidate the two big stable library downloads, and the studio is a lazy route a listener never downloads.</li>
       </ul>
 
       <h3><span class="h3-mark">→</span>Compositional decisions kept pure</h3>

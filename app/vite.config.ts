@@ -60,11 +60,20 @@ export default defineConfig({
     // audioWorklet.addModule() from a data: URL. Emit them as real asset files.
     assetsInlineLimit: (filePath: string) =>
       filePath.endsWith('.worklet.js') ? false : undefined,
-    // The engine chunk (tone + three, ~1 MB min / ~260 kB gzip) is deliberate: both
-    // libraries are needed the moment the engine constructs, and the chunk loads via
-    // dynamic import BEHIND the veil — the entry (react + player UI) stays ~60 kB
-    // gzip for first paint. Raise the limit so the warning flags regressions in the
-    // ENTRY, not the known engine payload.
-    chunkSizeWarningLimit: 1200,
+    // Everything heavy loads via dynamic import BEHIND the veil — the entry (react +
+    // player UI) stays ~60 kB gzip for first paint. tone and three get their own
+    // vendor chunks so engine-code changes don't invalidate the two big, stable
+    // library downloads (they fetch in parallel anyway).
+    rolldownOptions: {
+      output: {
+        advancedChunks: {
+          groups: [
+            { name: 'three', test: /node_modules[\\/]three[\\/]/ },
+            { name: 'tone', test: /node_modules[\\/](tone|standardized-audio-context|automation-events)[\\/]/ },
+          ],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 700,
   },
 });
