@@ -3,12 +3,21 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist', '**/dist', 'coverage', '**/*.config.*'],
+    // .claude holds agent worktrees (full repo copies) — linting them would
+    // double-lint the tree and confuse the parser's tsconfig-root detection.
+    ignores: ['dist', '**/dist', 'coverage', '**/*.config.*', '.claude'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      parserOptions: {
+        // Pin the root: sibling worktrees under .claude/ otherwise present a
+        // second candidate and typescript-eslint refuses to guess.
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',
