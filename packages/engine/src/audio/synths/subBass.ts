@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { smoothWrite } from '../smoothWrite';
 import { clamp } from '../../core/curves';
 import { makePortRef } from '../../core/ports';
 import type { SignalRegistry } from '../../core/registry';
@@ -61,7 +62,7 @@ export function createSubBass(): SynthModule {
         min: 0,
         max: 1.5,
         write: (v) => {
-          out.gain.value = clamp(v, 0, 1.5);
+          smoothWrite(out.gain, clamp(v, 0, 1.5));
         },
         audioTarget: out.gain,
       });
@@ -74,7 +75,7 @@ export function createSubBass(): SynthModule {
         min: 0,
         max: 1.5,
         write: (v) => {
-          subGain.gain.value = clamp(v, 0, 1.5);
+          smoothWrite(subGain.gain, clamp(v, 0, 1.5));
         },
         audioTarget: subGain.gain,
       });
@@ -87,7 +88,7 @@ export function createSubBass(): SynthModule {
         min: 0,
         max: 1.5,
         write: (v) => {
-          bodyGain.gain.value = clamp(v, 0, 1.5);
+          smoothWrite(bodyGain.gain, clamp(v, 0, 1.5));
         },
         audioTarget: bodyGain.gain,
       });

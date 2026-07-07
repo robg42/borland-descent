@@ -116,16 +116,20 @@ function buildReverb(params: Record<string, Scalar>, ir?: string): BuiltNode {
     input: reverb,
     output: reverb,
     async init() {
-      reverb.buffer = Tone.ToneAudioBuffer.fromArray(
-        generateHallIR(Tone.getContext().sampleRate, 1.4 + reverbSize * 7, 0.012 + reverbSize * 0.03),
-      );
+      // Prefer the real recorded IR; only synthesise the procedural hall when there is
+      // none (or the load fails) — generating up to ~8 s of stereo noise tail for a
+      // buffer that would be immediately replaced is wasted build-time work.
       if (ir) {
         try {
           await reverb.load(ir);
+          return;
         } catch (err) {
           console.warn('[borland] reverb IR failed to load; using the generated hall.', err);
         }
       }
+      reverb.buffer = Tone.ToneAudioBuffer.fromArray(
+        generateHallIR(Tone.getContext().sampleRate, 1.4 + reverbSize * 7, 0.012 + reverbSize * 0.03),
+      );
     },
     registerPorts() { /* no exposed controls */ },
     dispose() { reverb.dispose(); },
@@ -221,7 +225,7 @@ function buildCompressor(params: Record<string, Scalar>): BuiltNode {
         base: baseThreshold,
         min: -60,
         max: 0,
-        write: (v) => { comp.threshold.value = clamp(v, -60, 0); },
+        write: (v) => { smoothWrite(comp.threshold, clamp(v, -60, 0)); },
         audioTarget: comp.threshold,
       });
 
@@ -232,7 +236,7 @@ function buildCompressor(params: Record<string, Scalar>): BuiltNode {
         base: baseRatio,
         min: 1,
         max: 20,
-        write: (v) => { comp.ratio.value = clamp(v, 1, 20); },
+        write: (v) => { smoothWrite(comp.ratio, clamp(v, 1, 20)); },
         audioTarget: comp.ratio,
       });
 

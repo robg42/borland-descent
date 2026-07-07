@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { smoothWrite } from '../smoothWrite';
 import { clamp } from '../../core/curves';
 import { makePortRef } from '../../core/ports';
 import type { SignalRegistry } from '../../core/registry';
@@ -46,7 +47,7 @@ export function createVoidChoir(opts?: SynthOptions): SynthModule {
         min: CUTOFF_MIN,
         max: CUTOFF_MAX,
         write: (v) => {
-          filter.frequency.value = clamp(v, CUTOFF_MIN, CUTOFF_MAX);
+          smoothWrite(filter.frequency, clamp(v, CUTOFF_MIN, CUTOFF_MAX));
         },
         audioTarget: filter.frequency,
       });
@@ -59,7 +60,7 @@ export function createVoidChoir(opts?: SynthOptions): SynthModule {
         min: 0,
         max: 1.5,
         write: (v) => {
-          out.gain.value = clamp(v, 0, 1.5);
+          smoothWrite(out.gain, clamp(v, 0, 1.5));
         },
         audioTarget: out.gain,
       });

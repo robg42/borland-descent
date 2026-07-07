@@ -529,6 +529,11 @@ export class Engine {
       this.advanceCrossfade(dt);
       this.active?.applyArc(this.arcPosition);
       this.incoming?.applyArc(this.arcPosition);
+      // Refresh audio features before the matrix reads them — audio keeps playing
+      // while hidden, so without this every audio→X route freezes at its last
+      // foreground value for as long as the tab is in the background.
+      this.active?.tick(dt);
+      this.incoming?.tick(dt);
       this.matrix?.evaluateControl(dt);
     }, 250); // ~4 Hz
   }
