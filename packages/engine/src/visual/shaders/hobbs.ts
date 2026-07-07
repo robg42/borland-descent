@@ -42,6 +42,20 @@ const fragmentShader = /* glsl */ `
   uniform float uFog, uFlow, uDepth, uDark, uTurbulence, uRipple;
   varying vec2 vUv;
 
+  // two-octave fbm tuned for this module (glslCommon supplies hash/noise)
+  float fbm(vec2 p){ return 0.6 * noise(p) + 0.4 * noise(p * 2.13 + 7.7); }
+
+  // the Fidenza inks, darkened for the descent (linear)
+  vec3 palette(float h){
+    vec3 c = vec3(0.70, 0.63, 0.48);                    // bone
+    c = mix(c, vec3(0.52, 0.16, 0.06), step(0.18, h));  // rust
+    c = mix(c, vec3(0.06, 0.26, 0.30), step(0.38, h));  // deep teal
+    c = mix(c, vec3(0.62, 0.38, 0.08), step(0.56, h));  // amber
+    c = mix(c, vec3(0.10, 0.11, 0.13), step(0.72, h));  // charcoal
+    c = mix(c, vec3(0.24, 0.33, 0.55), step(0.88, h));  // dusk blue
+    return c;
+  }
+
   void main(){
     float aspect = uResolution.x / max(uResolution.y, 1.0);
     vec2 P = (vUv - 0.5) * vec2(aspect, 1.0);
