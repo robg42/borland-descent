@@ -1,26 +1,36 @@
-import { useState } from 'react';
 import type { Engine } from '@borland/engine';
+import { ArcTrack, type ArcZone } from './ArcTrack';
 
 interface Props {
   engine: Engine | null;
   started: boolean;
   busy: boolean;
   playing: boolean;
+  /** Monitor mute — owned by StudioView so the rail and the mobile console strip agree. */
+  muted: boolean;
   arc: number;
+  zones: ArcZone[];
+  editingIndex: number;
   onBegin: () => void;
   onToggle: () => void;
+  onMute: () => void;
   onArc: (v: number) => void;
 }
 
-export function TransportBar({ engine, started, busy, playing, arc, onBegin, onToggle, onArc }: Props) {
-  // Monitor mute is ephemeral engine state (never saved with the patch); mirror
-  // it locally so the button re-renders — it survives rebuilds on Tone's side.
-  const [muted, setMuted] = useState(() => engine?.monitorMuted ?? false);
-  const toggleMute = (): void => {
-    if (!engine) return;
-    engine.setMonitorMuted(!muted);
-    setMuted(!muted);
-  };
+export function TransportBar({
+  engine,
+  started,
+  busy,
+  playing,
+  muted,
+  arc,
+  zones,
+  editingIndex,
+  onBegin,
+  onToggle,
+  onMute,
+  onArc,
+}: Props) {
   return (
     <div className="transport">
       {!started ? (
@@ -32,27 +42,21 @@ export function TransportBar({ engine, started, busy, playing, arc, onBegin, onT
           {playing ? 'pause' : 'play'}
         </button>
       )}
+      {/* constant name + aria-pressed (APG toggle pattern); .btn--held carries the visual */}
       <button
-        className="btn"
-        onClick={toggleMute}
+        className={`btn${muted ? ' btn--held' : ''}`}
+        onClick={onMute}
         disabled={!engine}
-        title="monitor mute — silences the output without touching the patch"
+        title="monitor mute: silences the output without touching the patch"
         aria-pressed={muted}
       >
-        {muted ? 'unmute' : 'mute'}
+        mute
       </button>
       <div className="transport__arc">
         <span className="ctl__name">
           <b>arc</b>
         </span>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.001}
-          value={arc}
-          onChange={(e) => onArc(parseFloat(e.target.value))}
-        />
+        <ArcTrack value={arc} zones={zones} editingIndex={editingIndex} onChange={onArc} />
         <span className="ctl__val">{arc.toFixed(2)}</span>
       </div>
     </div>

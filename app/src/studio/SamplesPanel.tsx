@@ -210,11 +210,7 @@ export const SamplesPanel = memo(function SamplesPanel({ onAssign, activeSceneNa
       ) : (
         <div style={{ marginTop: '0.6rem' }}>
           {samples.map((s) => (
-            <div
-              className="ctl"
-              key={s.id}
-              style={{ gridTemplateColumns: '1fr auto auto auto auto' }}
-            >
+            <div className="ctl ctl--sample" key={s.id}>
               <span className="ctl__name" title={`${s.name} · root ${s.rootMidi}`}>
                 {s.name}
               </span>
@@ -223,6 +219,7 @@ export const SamplesPanel = memo(function SamplesPanel({ onAssign, activeSceneNa
                 disabled={locked}
                 onClick={() => void preview(s.id)}
                 title="preview"
+                aria-label={`preview ${s.name}`}
               >
                 ▶
               </button>
@@ -231,6 +228,7 @@ export const SamplesPanel = memo(function SamplesPanel({ onAssign, activeSceneNa
                 disabled={locked}
                 onClick={() => onAssign(s.id)}
                 title="use as the current scene's voice"
+                aria-label={`use ${s.name} as the current scene's voice`}
               >
                 use
               </button>
@@ -239,14 +237,16 @@ export const SamplesPanel = memo(function SamplesPanel({ onAssign, activeSceneNa
                 disabled={locked}
                 onClick={() => void runResynth(s.id)}
                 title={`resynthesise (${resynthKind} ×${stretch}) → new sample`}
+                aria-label={`resynthesise ${s.name}`}
               >
                 {rendering?.id === s.id ? `${Math.round(rendering.pct * 100)}%` : '⟳'}
               </button>
               <button
-                className="btn btn--icon btn--ghost"
+                className="btn btn--icon btn--ghost btn--del"
                 disabled={locked}
                 onClick={() => void remove(s.id)}
                 title="remove"
+                aria-label={`remove ${s.name}`}
               >
                 ✕
               </button>

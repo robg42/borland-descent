@@ -1,4 +1,4 @@
-import { memo, type CSSProperties, useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import type { Engine, InputPortInfo, Patch } from '@borland/engine';
 
 interface Props {
@@ -6,6 +6,8 @@ interface Props {
   inputs: InputPortInfo[];
   /** The working patch — used to classify each port's node (synth / effect / mix / visual). */
   patch: Patch | null;
+  /** Whether automate can work yet (source ports register when the audio wakes). */
+  canAutomate?: boolean;
   /** Add a modulation route targeting this port (one-click automate). */
   onAutomate?: (target: string) => void;
 }
@@ -38,7 +40,13 @@ function categoryOf(nodeId: string, patch: Patch | null): string {
  * visual params). Every modulatable input is a slider; editing sets the port's base value
  * live; the ⤳ button drops a modulation route targeting the parameter into the matrix.
  */
-export const SceneParams = memo(function SceneParams({ engine, inputs, patch, onAutomate }: Props) {
+export const SceneParams = memo(function SceneParams({
+  engine,
+  inputs,
+  patch,
+  canAutomate,
+  onAutomate,
+}: Props) {
   const [vals, setVals] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -77,11 +85,12 @@ export const SceneParams = memo(function SceneParams({ engine, inputs, patch, on
     if (p.kind === 'option' && p.options && p.options.length > 0) {
       const idx = Math.round(value);
       return (
-        <div className="ctl" key={p.ref} style={{ gridTemplateColumns: '1fr auto' }}>
+        <div className="ctl" key={p.ref}>
           <span className="ctl__name" title={p.ref}>{port}</span>
           <span />
           <select
             className="ctl__range field"
+            aria-label={p.ref}
             value={p.options[idx] ?? p.options[0]}
             onChange={(e) => {
               const i = p.options!.indexOf(e.target.value);
@@ -100,7 +109,7 @@ export const SceneParams = memo(function SceneParams({ engine, inputs, patch, on
     const max = p.max ?? 1;
     const step = (max - min) / 200 || 0.01;
     return (
-      <div className="ctl" key={p.ref} style={{ gridTemplateColumns: '1fr auto auto' }}>
+      <div className="ctl ctl--acts" key={p.ref}>
         <span className="ctl__name" title={p.ref}>
           {port}
         </span>
@@ -108,7 +117,13 @@ export const SceneParams = memo(function SceneParams({ engine, inputs, patch, on
         {onAutomate ? (
           <button
             className="btn btn--icon btn--ghost"
-            title="automate — add a route targeting this parameter"
+            disabled={!canAutomate}
+            title={
+              canAutomate
+                ? 'automate: add a route targeting this parameter'
+                : 'begin first: ports register when the audio wakes'
+            }
+            aria-label={`automate ${p.ref}`}
             onClick={() => onAutomate(p.ref)}
           >
             ⤳
@@ -119,6 +134,7 @@ export const SceneParams = memo(function SceneParams({ engine, inputs, patch, on
         <input
           className="ctl__range"
           type="range"
+          aria-label={p.ref}
           min={min}
           max={max}
           step={step}
@@ -140,10 +156,10 @@ export const SceneParams = memo(function SceneParams({ engine, inputs, patch, on
       )}
       {CATEGORIES.filter((c) => byCategory.has(c.key)).map((c) => (
         <div key={c.key}>
-          <p style={CAT_STYLE}>{c.label}</p>
+          <p className="params__cat">{c.label}</p>
           {byCategory.get(c.key)!.map(([node, ports]) => (
             <div key={node} className="params__node">
-              <p style={NODE_STYLE}>{node}</p>
+              <p className="params__nodehead">{node}</p>
               {ports.map(ctl)}
             </div>
           ))}
@@ -152,25 +168,6 @@ export const SceneParams = memo(function SceneParams({ engine, inputs, patch, on
     </div>
   );
 });
-
-const CAT_STYLE: CSSProperties = {
-  fontSize: '0.66rem',
-  textTransform: 'uppercase',
-  letterSpacing: '0.2em',
-  color: 'var(--ink)',
-  fontWeight: 600,
-  margin: '1.1rem 0 0.2rem',
-  paddingBottom: '0.3rem',
-  borderBottom: '1px solid var(--hairline)',
-};
-
-const NODE_STYLE: CSSProperties = {
-  fontSize: '0.58rem',
-  textTransform: 'uppercase',
-  letterSpacing: '0.16em',
-  color: 'var(--accent)',
-  margin: '0.55rem 0 0.05rem',
-};
 
 function format(v: number): string {
   return Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2);

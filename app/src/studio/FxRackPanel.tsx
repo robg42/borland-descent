@@ -47,17 +47,38 @@ function chainBetween(
  * nodes. Topology changes rebuild the engine (the caller passes `onPatchChange`
  * which StudioView routes to `setPatch + setReload`).
  */
+const FALLBACK_INSERT = 'glue';
+
 export const FxRackPanel = memo(function FxRackPanel({ patch, onPatchChange }: Props) {
   const [selPreset, setSelPreset] = useState(0);
-  const [insertBefore, setInsertBefore] = useState('glue');
+  const [insertBefore, setInsertBefore] = useState(FALLBACK_INSERT);
+
+  const nodes = patch?.audioGraph.nodes ?? [];
+  const connections = patch?.audioGraph.connections ?? [];
+
+  // Paths we'll display
+  const voicesChain = chainBetween(connections, 'voices', 'master');
+  const bassChain = chainBetween(connections, 'bass', 'master');
+  const shimmerChain = chainBetween(connections, 'wetBus', 'master');
+
+  // All nodes that could be insert targets (non-source nodes reachable from voices/bass)
+  const chainNodes = new Set([...voicesChain, ...bassChain]);
+  const insertTargets = nodes.filter((n) => chainNodes.has(n.id) && n.id !== 'voices' && n.id !== 'bass');
+
+  // Reconciled at render time: after an import (or a removal) the remembered id may
+  // no longer exist in the graph, which would leave the select DISPLAYING one node
+  // while add() silently targets another.
+  const effectiveInsertBefore = insertTargets.some((n) => n.id === insertBefore)
+    ? insertBefore
+    : (insertTargets[0]?.id ?? FALLBACK_INSERT);
 
   const addEffect = useCallback(() => {
     if (!patch) return;
     const preset = EFFECT_PRESETS[selPreset];
     if (!preset) return;
     const id = `${preset.moduleId}_${Date.now().toString(36).slice(-4)}`;
-    onPatchChange(insertEffectBefore(patch, preset, insertBefore, id));
-  }, [patch, selPreset, insertBefore, onPatchChange]);
+    onPatchChange(insertEffectBefore(patch, preset, effectiveInsertBefore, id));
+  }, [patch, selPreset, effectiveInsertBefore, onPatchChange]);
 
   const removeNode = useCallback(
     (nodeId: string) => {
@@ -68,17 +89,6 @@ export const FxRackPanel = memo(function FxRackPanel({ patch, onPatchChange }: P
   );
 
   if (!patch) return <p className="hint">Load a patch to edit its effect chain.</p>;
-
-  const { nodes, connections } = patch.audioGraph;
-
-  // Paths we'll display
-  const voicesChain = chainBetween(connections, 'voices', 'master');
-  const bassChain = chainBetween(connections, 'bass', 'master');
-  const shimmerChain = chainBetween(connections, 'wetBus', 'master');
-
-  // All nodes that could be insert targets (non-source nodes reachable from voices/bass)
-  const chainNodes = new Set([...voicesChain, ...bassChain]);
-  const insertTargets = nodes.filter((n) => chainNodes.has(n.id) && n.id !== 'voices' && n.id !== 'bass');
 
   return (
     <div className="fx">
@@ -98,7 +108,7 @@ export const FxRackPanel = memo(function FxRackPanel({ patch, onPatchChange }: P
         <span className="seq__fl">before</span>
         <select
           className="field"
-          value={insertBefore}
+          value={effectiveInsertBefore}
           onChange={(e) => setInsertBefore(e.target.value)}
         >
           {insertTargets.map((n) => (
@@ -149,9 +159,10 @@ function ChainView({ label, chain, nodes, onRemove }: ChainViewProps) {
                 )}
                 {removable && (
                   <button
-                    className="btn btn--ghost btn--icon fx__remove"
+                    className="btn btn--ghost btn--icon fx__remove btn--del"
                     onClick={() => onRemove(id)}
                     title={`Remove ${id}`}
+                    aria-label={`remove ${id}`}
                   >
                     ×
                   </button>

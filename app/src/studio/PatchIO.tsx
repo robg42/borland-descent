@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { safeValidatePatch, type Patch } from '@borland/engine';
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
  * as JSON to commit to patches/borland.json; import validates a JSON file and
  * reloads the engine against it.
  */
-export function PatchIO({ getPatch, onImport }: Props) {
+export const PatchIO = memo(function PatchIO({ getPatch, onImport }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,10 +69,10 @@ export function PatchIO({ getPatch, onImport }: Props) {
         />
       </div>
       {error && (
-        <p className="hint" style={{ color: 'var(--accent-warm)', marginTop: '0.6rem' }}>
+        <p className="hint hint--warn" role="alert">
           {error}
         </p>
       )}
     </div>
   );
-}
+});

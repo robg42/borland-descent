@@ -15,17 +15,21 @@ import { PatchIO } from './PatchIO';
 import { SamplesPanel } from './SamplesPanel';
 import { SequencerPanel } from './SequencerPanel';
 import { FxRackPanel } from './FxRackPanel';
+import { ArcTrack } from './ArcTrack';
+import { DEFAULT_SMOOTHING_MS, routeId } from './ids';
 
 /** The workbench editors, one mounted at a time (focus + render cost). */
 const TABS = [
-  { id: 'params', label: 'params' },
-  { id: 'matrix', label: 'matrix' },
-  { id: 'sequencer', label: 'sequencer' },
-  { id: 'fx', label: 'fx rack' },
-  { id: 'samples', label: 'samples' },
-  { id: 'patch', label: 'patch' },
+  { id: 'params', label: 'params', full: 'scene parameters' },
+  { id: 'matrix', label: 'matrix', full: 'modulation matrix' },
+  { id: 'sequencer', label: 'sequencer', full: 'sequencer' },
+  { id: 'fx', label: 'fx rack', full: 'fx rack' },
+  { id: 'samples', label: 'samples', full: 'samples' },
+  { id: 'patch', label: 'patch', full: 'patch' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
+// derived once so a missing label is impossible, not an empty header at runtime
+const TAB_FULL = Object.fromEntries(TABS.map((t) => [t.id, t.full])) as Record<TabId, string>;
 
 /**
  * The studio as a console: a sticky RAIL on the left holds the live preview, the
@@ -33,7 +37,9 @@ type TabId = (typeof TABS)[number]['id'];
  * identity pickers; the BENCH on the right is a tabbed workbench where exactly one
  * editor mounts at a time — the preview never scrolls away, and the editing surface
  * gets the full remaining width instead of a single buried column. On narrow
- * screens the rail compacts to the top and the tab strip pins below the header.
+ * screens the rail compacts to the top and a sticky console strip (begin/play,
+ * mute, the ticked depth scrubber) keeps the instrument under the thumbs above the
+ * pinned tab strip.
  */
 export function StudioView() {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
@@ -44,16 +50,25 @@ export function StudioView() {
   const [bpm, setBpm] = useState(0);
   const [tab, setTab] = useState<TabId>('params');
   const engine = useEngine(patch, container, patch ? 1 + reload : 0, { sceneIndex, initialArc: arc });
-  // dev-only debug handle: lets headless preview verification reach the engine
-  if (import.meta.env.DEV) (window as unknown as { __engine?: unknown }).__engine = engine;
 
   const [started, setStarted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
   const [tick, setTick] = useState(0);
   const [routes, setRoutes] = useState<ModulationRoute[]>([]);
   const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [matrixPulse, setMatrixPulse] = useState(false);
   const startedRef = useRef(false);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  // dev-only debug handle: lets headless preview verification reach the engine.
+  // In an effect (not the render body) so StrictMode's doubled render stays pure.
+  useEffect(() => {
+    if (import.meta.env.DEV) (window as unknown as { __engine?: unknown }).__engine = engine;
+  }, [engine]);
 
   // load the canonical patch at boot
   useEffect(() => {
@@ -72,6 +87,7 @@ export function StudioView() {
   useEffect(() => {
     if (!engine) return;
     setTick((t) => t + 1);
+    setMuted(engine.monitorMuted); // monitor mute is ephemeral engine state
     if (startedRef.current) {
       void engine.start().then(() => {
         setStarted(true);
@@ -88,6 +104,14 @@ export function StudioView() {
     setRoutes(patch?.modulationMatrix ?? []);
     setSequences(patch?.sequences ?? []);
   }, [patch]);
+
+  // clear any pending automate-highlight timer on unmount
+  useEffect(
+    () => () => {
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    },
+    [],
+  );
 
   // keep the arc slider + the tempo gauge in step with the live engine
   useEffect(() => {
@@ -140,6 +164,13 @@ export function StudioView() {
     }
   }, [engine]);
 
+  const onMute = useCallback(() => {
+    if (!engine) return;
+    const next = !muted;
+    engine.setMonitorMuted(next);
+    setMuted(next);
+  }, [engine, muted]);
+
   const onArc = useCallback(
     (v: number) => {
       setArc(v);
@@ -176,7 +207,8 @@ export function StudioView() {
 
   const onImport = useCallback((next: Patch) => {
     setPatch(next);
-    setSceneIndex(0);
+    // keep the author in the scene they were checking, clamped to the new document
+    setSceneIndex((i) => Math.max(0, Math.min(i, next.scenes.length - 1)));
     setReload((r) => r + 1);
   }, []);
 
@@ -185,6 +217,8 @@ export function StudioView() {
     setPatch(next);
     setReload((r) => r + 1);
   }, []);
+
+  const getPatch = useCallback(() => engine?.patch ?? patch, [engine, patch]);
 
   // Assign a loaded sample as the current scene's voice: point the scene + its 'voices'
   // node at the sampler module and reference the sample by id, then rebuild the engine.
@@ -208,25 +242,31 @@ export function StudioView() {
   );
 
   // One-click automate: drop a control route targeting a parameter into the matrix,
-  // defaulting its source to the arc (so it moves with the descent) — tune it from there.
+  // defaulting its source to the arc (so it moves with the descent) — then HAND OVER:
+  // flash the new row, pulse the matrix tab if it isn't the one you're looking at.
   const onAutomate = useCallback(
     (target: string) => {
       const source = outputs.find((o) => o.ref === 'arc.darkness')?.ref ?? outputs[0]?.ref;
       if (!source) return;
-      const id = `auto_${target.replace(/\W/g, '_')}_${Math.random().toString(36).slice(2, 7)}`;
+      const id = routeId();
       const route: ModulationRoute = {
         id,
         source,
         target,
         amount: 0.4,
         curve: 'linear',
-        smoothing: 80,
+        smoothing: DEFAULT_SMOOTHING_MS,
         rate: 'control',
         enabled: true,
       };
       applyRoutes([...routes, route]);
+      // The highlight persists until the author ARRIVES on the matrix tab —
+      // selectTab starts the fade countdown then. Expiring it from the click
+      // would let the flash burn out while the row cannot be seen.
+      setHighlightId(id);
+      if (tab !== 'matrix') setMatrixPulse(true);
     },
-    [outputs, routes, applyRoutes],
+    [outputs, routes, applyRoutes, tab],
   );
 
   // Set the active scene's voice to any registered synth module, then rebuild the engine.
@@ -269,18 +309,46 @@ export function StudioView() {
 
   const scenes = patch?.scenes ?? [];
   const sceneRefs = useMemo(() => scenes.map((s) => ({ id: s.id, name: s.name })), [scenes]);
+  const zones = useMemo(
+    () => (patch?.scenes ?? []).map((s) => ({ id: s.id, name: s.name, range: s.arcRange })),
+    [patch],
+  );
 
-  const TAB_LABELS: Record<TabId, string> = {
-    params: 'scene parameters',
-    matrix: 'modulation matrix',
-    sequencer: 'sequencer',
-    fx: 'fx rack',
-    samples: 'samples',
-    patch: 'patch',
-  };
+  const selectTab = useCallback(
+    (id: TabId): void => {
+      setTab(id);
+      if (id === 'matrix') {
+        setMatrixPulse(false); // seen — no need to keep pulsing
+        // the author has arrived: give the row flash its full run, then let go
+        if (highlightId) {
+          if (highlightTimer.current) clearTimeout(highlightTimer.current);
+          highlightTimer.current = setTimeout(() => setHighlightId(null), 2500);
+        }
+      }
+    },
+    [highlightId],
+  );
+
+  const onTabKeyDown = useCallback(
+    (e: React.KeyboardEvent): void => {
+      // Roving focus moves from the FOCUSED tab (which may not be the selected one —
+      // manual activation: arrows move focus, Enter/Space selects).
+      const focusIdx = tabRefs.current.findIndex((el) => el === document.activeElement);
+      const idx = focusIdx >= 0 ? focusIdx : TABS.findIndex((t) => t.id === tab);
+      let next = -1;
+      if (e.key === 'ArrowRight') next = (idx + 1) % TABS.length;
+      else if (e.key === 'ArrowLeft') next = (idx - 1 + TABS.length) % TABS.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = TABS.length - 1;
+      if (next === -1) return;
+      e.preventDefault();
+      tabRefs.current[next]?.focus();
+    },
+    [tab],
+  );
 
   return (
-    <div className="studio">
+    <div className={`studio${started ? ' studio--live' : ''}`}>
       <header className="studio__bar">
         <h1 className="studio__title">Borland</h1>
         <span className="studio__tag">descent · studio</span>
@@ -289,7 +357,8 @@ export function StudioView() {
       <div className="studio__workspace">
         <aside className="studio__rail">
           <div className="studio__preview">
-            <span className="studio__previewLabel">live</span>
+            <span className="studio__previewLabel">{started ? 'live' : 'standby'}</span>
+            {/* this node's identity keys the engine — never move it into a conditional branch */}
             <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
           </div>
 
@@ -298,18 +367,30 @@ export function StudioView() {
             started={started}
             busy={busy}
             playing={playing}
+            muted={muted}
             arc={arc}
+            zones={zones}
+            editingIndex={sceneIndex}
             onBegin={begin}
             onToggle={toggle}
+            onMute={onMute}
             onArc={onArc}
           />
 
           <dl className="gauges" aria-label="live readouts">
             <div className="gauge">
               <dt className="gauge__label">depth</dt>
-              <dd className="gauge__value">
-                {(arc * 100).toFixed(0)}
-                <em>%</em>
+              <dd className="gauge__value gauge__value--meter">
+                <span className="gauge__meter" aria-hidden="true">
+                  <span
+                    className="gauge__cursor"
+                    style={{ transform: `translateX(${arc * 100}%)` }}
+                  />
+                </span>
+                <span>
+                  {(arc * 100).toFixed(0)}
+                  <em>%</em>
+                </span>
               </dd>
             </div>
             <div className="gauge">
@@ -328,7 +409,7 @@ export function StudioView() {
           <div className="rail__pickers">
             {scenes.length > 1 && (
               <label className="rail__picker">
-                <span className="rail__pickerLabel">scene</span>
+                <span className="rail__pickerLabel">editing</span>
                 <select
                   className="field"
                   value={sceneIndex}
@@ -379,18 +460,67 @@ export function StudioView() {
         </aside>
 
         <main className="studio__bench">
-          <nav className="tabs" role="tablist" aria-label="studio editors">
-            {TABS.map((t) => (
+          <div className="console" role="group" aria-label="live transport">
+            {!started ? (
+              <button className="btn btn--accent" onClick={begin} disabled={!engine || busy}>
+                {busy ? 'beginning…' : 'begin'}
+              </button>
+            ) : (
+              <button className="btn" onClick={toggle}>
+                {playing ? 'pause' : 'play'}
+              </button>
+            )}
+            <button
+              className={`btn${muted ? ' btn--held' : ''}`}
+              onClick={onMute}
+              disabled={!engine}
+              aria-pressed={muted}
+              title="monitor mute: silences the output without touching the patch"
+            >
+              mute
+            </button>
+            <ArcTrack value={arc} zones={zones} editingIndex={sceneIndex} onChange={onArc} />
+            <span className="console__depth" aria-hidden>
+              {Math.round(arc * 100)}%
+            </span>
+          </div>
+
+          <nav className="tabs" role="tablist" aria-label="studio editors" onKeyDown={onTabKeyDown}>
+            {TABS.map((t, i) => (
               <button
                 key={t.id}
+                ref={(el) => {
+                  tabRefs.current[i] = el;
+                }}
                 role="tab"
                 id={`tab-${t.id}`}
                 aria-selected={tab === t.id}
                 aria-controls="bench-panel"
-                className={`tab${tab === t.id ? ' tab--sel' : ''}`}
-                onClick={() => setTab(t.id)}
+                aria-label={
+                  t.id === 'matrix' && routes.length > 0
+                    ? `matrix, ${routes.length} routes`
+                    : t.id === 'sequencer' && sequences.length > 0
+                      ? `sequencer, ${sequences.length} sequences`
+                      : undefined
+                }
+                tabIndex={tab === t.id ? 0 : -1}
+                className={`tab${tab === t.id ? ' tab--sel' : ''}${
+                  t.id === 'matrix' && matrixPulse ? ' tab--pulse' : ''
+                }`}
+                onClick={() => selectTab(t.id)}
+                onAnimationEnd={t.id === 'matrix' ? () => setMatrixPulse(false) : undefined}
               >
                 {t.label}
+                {t.id === 'matrix' && routes.length > 0 && (
+                  <span className="tab__count" aria-hidden>
+                    {routes.length}
+                  </span>
+                )}
+                {t.id === 'sequencer' && sequences.length > 0 && (
+                  <span className="tab__count" aria-hidden>
+                    {sequences.length}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -402,13 +532,14 @@ export function StudioView() {
             className="panel panel--bench"
           >
             <div className="panel__head">
-              <p className="panel__label">{TAB_LABELS[tab]}</p>
+              <p className="panel__label">{TAB_FULL[tab]}</p>
             </div>
             {tab === 'params' && (
               <SceneParams
                 engine={engine}
                 inputs={inputs}
                 patch={engine?.patch ?? patch}
+                canAutomate={outputs.length > 0}
                 onAutomate={onAutomate}
               />
             )}
@@ -418,6 +549,7 @@ export function StudioView() {
                 inputs={inputs}
                 outputs={outputs}
                 scenes={sceneRefs}
+                highlightId={highlightId}
                 onChange={applyRoutes}
               />
             )}
@@ -430,9 +562,7 @@ export function StudioView() {
             {tab === 'samples' && (
               <SamplesPanel onAssign={assignSample} activeSceneName={scenes[sceneIndex]?.name} />
             )}
-            {tab === 'patch' && (
-              <PatchIO getPatch={() => engine?.patch ?? patch} onImport={onImport} />
-            )}
+            {tab === 'patch' && <PatchIO getPatch={getPatch} onImport={onImport} />}
           </section>
         </main>
       </div>

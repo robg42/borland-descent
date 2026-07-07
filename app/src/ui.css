@@ -4,6 +4,7 @@
 :root {
   --bg: #04070a;
   --bg-2: #0a1014;
+  --bg-3: rgb(6, 10, 13); /* sticky-chrome gradient endpoint (tabs, console strip) */
   --ink: #e9e6df;
   --ink-dim: #9aa3a3;
   --ink-faint: #525c61;
@@ -26,6 +27,13 @@ body {
   font-family: var(--font-mono);
   background: var(--bg);
   accent-color: var(--accent); /* native checkboxes/ranges take the teal */
+}
+/* app/index.html sets body touch-action:none for the player (the canvas IS the
+   instrument); the studio is a scrolling document and must pan. The porthole
+   stays gesture-safe because the engine sets touchAction none inline on its own
+   container and preventDefaults its moves (gesture.ts). */
+body:has(.studio) {
+  touch-action: pan-y;
 }
 
 /* ---- Player ---------------------------------------------------------------- */
@@ -319,6 +327,53 @@ body {
   font-size: 0.78rem;
   letter-spacing: 0.06em;
 }
+/* the depth needle: a full-width inset meter whose cursor wrapper is translated
+   by arc from React — transform/opacity only, never a painted background */
+.gauge__value--meter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  flex: 1;
+  min-width: 0;
+}
+.gauge__meter {
+  position: relative;
+  flex: 1;
+  height: 2px;
+  background: var(--hairline);
+}
+.gauge__cursor {
+  position: absolute;
+  inset: 0;
+}
+.gauge__cursor::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 9px;
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(121, 199, 190, 0.6);
+}
+
+/* standby/live: the begin-gated console reads as deliberate standby, not a dead
+   page — cold gauges and a warm label until the audio wakes */
+.gauge__value,
+.studio__previewLabel {
+  transition: color 0.6s ease;
+}
+.studio:not(.studio--live) .gauge__value {
+  color: var(--ink-faint);
+}
+.studio:not(.studio--live) .studio__previewLabel {
+  color: var(--accent-warm);
+}
+.studio--live .studio__previewLabel {
+  color: var(--accent);
+}
 
 .rail__pickers {
   display: flex;
@@ -348,7 +403,7 @@ body {
   flex-wrap: wrap;
   padding: 0.85rem 0 0;
   border-bottom: 1px solid var(--hairline);
-  background: linear-gradient(180deg, var(--bg-2), rgb(6, 10, 13));
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-3));
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
@@ -373,13 +428,94 @@ body {
   box-shadow: inset 0 -2px 0 0 var(--accent);
   text-shadow: 0 0 14px rgba(121, 199, 190, 0.45);
 }
+.tab__count {
+  margin-left: 0.45em;
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-dim); /* counts are content, not decoration — keep them legible */
+  font-variant-numeric: tabular-nums;
+}
+.tab--sel .tab__count {
+  color: var(--accent);
+}
+/* static handoff cue — the animated fade (motion block) supersedes this while
+   motion is allowed; reduced-motion users keep it until the tab is visited */
+.tab--pulse {
+  color: var(--accent);
+  text-shadow: 0 0 14px rgba(121, 199, 190, 0.45);
+}
 
 .matrix-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+.matrix__hint {
+  margin: 0 0 0.6rem;
+}
+.matrix__foot {
+  margin-top: 0.7rem;
+}
+.matrix__row--new {
+  background: rgba(121, 199, 190, 0.08); /* static tint for reduced-motion users */
+}
+/* keep flash-scrolled rows clear of the sticky console + tab chrome */
+.matrix tbody tr {
+  scroll-margin-top: calc(var(--console-h, 0rem) + 5rem);
+}
+
+/* params/samples hygiene: the former inline style objects, as classes */
+.params__cat {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--ink);
+  font-weight: 600;
+  margin: 1.1rem 0 0.2rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--hairline);
+}
+.params__nodehead {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+  margin: 0.55rem 0 0.05rem;
+}
+/* doubled class: these modifiers are declared before the .ctl/.hint base rules in
+   this file, so they need the extra specificity to win regardless of source order */
+.ctl.ctl--acts {
+  grid-template-columns: 1fr auto auto;
+}
+.ctl.ctl--sample {
+  grid-template-columns: 1fr auto auto auto auto;
+}
+.hint.hint--warn {
+  color: var(--accent-warm);
+  margin-top: 0.6rem;
+}
+
+/* one visible keyboard story for the whole console (fields keep their border focus) */
+.studio :where(.tab, .btn, .seq__cell, .seq__tab, input[type='range'], input[type='checkbox']):focus-visible {
+  outline: 2px solid rgba(121, 199, 190, 0.7);
+  outline-offset: 2px;
+}
+
+/* the mobile console strip: hidden on desktop, pinned above the tab strip <=880 */
+.console {
+  display: none;
+}
+.console__depth {
+  font-size: 0.72rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  min-width: 3.2ch;
+  text-align: right;
+}
 
 @media (max-width: 880px) {
+  .studio {
+    --console-h: 3.25rem;
+  }
   .studio__workspace {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -396,6 +532,30 @@ body {
   .studio__bench {
     padding: 0 1rem 2rem;
   }
+  /* the console strip pins the transport + depth scrubber under the thumbs while
+     any editor is open; the tab strip stacks directly beneath it. Deliberately no
+     backdrop-filter (containing-block hazards) — the gradient is near-opaque. */
+  .console {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    height: var(--console-h);
+    margin: 0 -1rem;
+    padding: 0 1rem;
+    background: linear-gradient(180deg, var(--bg-2), var(--bg-3));
+    border-bottom: 1px solid var(--hairline);
+  }
+  .tabs {
+    top: var(--console-h);
+  }
+  /* the strip replaces the rail transport on phones — never two of the same
+     control set in the page (or the accessibility tree) at once */
+  .studio__rail .transport {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -404,6 +564,29 @@ body {
   }
   .studio__bench {
     animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 0.12s both;
+  }
+  .gauge__cursor {
+    transition: transform 0.26s cubic-bezier(0.25, 0.9, 0.3, 1);
+  }
+  .tab--pulse {
+    animation: tabPulse 1.4s ease-out both;
+  }
+  @keyframes tabPulse {
+    from {
+      color: var(--accent);
+      text-shadow: 0 0 14px rgba(121, 199, 190, 0.6);
+    }
+  }
+  .matrix__row--new {
+    animation: rowFlash 1.6s ease-out both;
+  }
+  @keyframes rowFlash {
+    from {
+      background: rgba(121, 199, 190, 0.18);
+    }
+    to {
+      background: transparent;
+    }
   }
 }
 
@@ -454,7 +637,6 @@ input[type='range'] {
   height: 2px;
   background: var(--hairline);
   border-radius: 2px;
-  outline: none;
   margin: 0.35rem 0 0.1rem;
 }
 input[type='range']::-webkit-slider-thumb {
@@ -551,6 +733,19 @@ input.field {
   background: var(--accent);
   border-color: var(--accent);
 }
+/* accent grammar: warm = needs attention — destructive intent (hover/focus),
+   a held/engaged state, an error, or standby awaiting begin */
+.btn--del:hover,
+.btn--del:focus-visible {
+  border-color: rgba(201, 139, 107, 0.55);
+  color: var(--accent-warm);
+  background: rgba(201, 139, 107, 0.08);
+}
+.btn--held {
+  color: var(--accent-warm);
+  border-color: rgba(201, 139, 107, 0.4);
+  background: rgba(201, 139, 107, 0.06);
+}
 
 .row {
   display: flex;
@@ -579,6 +774,51 @@ input.field {
 }
 .transport__arc .ctl__name {
   flex: none; /* never ellipsise the three-letter label into “a…” */
+}
+
+/* the depth-gauge scrubber: scene-boundary ticks + an "editing here" band over
+   the native range input (which stays the only control). The input gets a REAL
+   hit box (2.75rem tall — WCAG target size on the phone strip) while the visible
+   track stays a hairline painted as a background gradient. */
+.arc {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.arc input[type='range'] {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  height: 2.75rem;
+  background: linear-gradient(var(--hairline), var(--hairline)) center / 100% 2px no-repeat;
+}
+/* calibration layer: inset by half the 13px thumb so tick percentages share the
+   thumb-centre's travel space — the gauge must not lie at its own boundaries */
+.arc__cal {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6.5px;
+  right: 6.5px;
+  pointer-events: none;
+}
+.arc__tick {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 1px;
+  height: 9px;
+  background: rgba(233, 230, 223, 0.22);
+}
+.arc__band {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 7px;
+  border-radius: 2px;
+  background: rgba(121, 199, 190, 0.1);
 }
 
 /* scene parameters flow into columns on a wide bench — one sparse full-width

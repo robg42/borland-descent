@@ -105,7 +105,7 @@ export const SequencerPanel = memo(function SequencerPanel({ sequences, inputs, 
             {s.name || `seq ${i + 1}`}
           </button>
         ))}
-        <button className="btn btn--icon" onClick={addSeq} title="Add sequence">
+        <button className="btn btn--icon" onClick={addSeq} title="Add sequence" aria-label="add sequence">
           +
         </button>
       </div>
@@ -128,7 +128,12 @@ export const SequencerPanel = memo(function SequencerPanel({ sequences, inputs, 
               />
               on
             </label>
-            <button className="btn btn--ghost btn--icon" onClick={deleteSeq} title="Delete sequence">
+            <button
+              className="btn btn--ghost btn--icon btn--del"
+              onClick={deleteSeq}
+              title="Delete sequence"
+              aria-label="delete sequence"
+            >
               ×
             </button>
           </div>
@@ -253,6 +258,8 @@ export const SequencerPanel = memo(function SequencerPanel({ sequences, inputs, 
                       .join(' ')}
                     onClick={() => toggleStep(si)}
                     title={`Step ${si + 1}`}
+                    aria-label={`step ${si + 1}`}
+                    aria-pressed={step.on}
                     style={step.on ? ({ '--vel': step.velocity } as React.CSSProperties) : undefined}
                   />
                 );
