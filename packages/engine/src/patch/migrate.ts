@@ -5,7 +5,7 @@
  * loading forever, and re-running a migration is harmless.
  */
 
-export const CURRENT_PATCH_VERSION = 3;
+export const CURRENT_PATCH_VERSION = 4;
 
 type Step = (doc: Record<string, unknown>) => void;
 
@@ -18,6 +18,27 @@ const STEPS: Record<number, Step> = {
   // v2 -> v3: presets enter the Patch (VISUAL-REBUILD V1 reserves the seat).
   2: (doc) => {
     doc.presets ??= [];
+  },
+  // v3 -> v4: the grade postfx node (vignette / warmth / pulse) joins the
+  // postChain so studio edits to grade.* persist (writeParamToPatch resolves
+  // the node by id). Patches without a postChain keep working — the host
+  // falls back to the same defaults.
+  3: (doc) => {
+    const vg = doc.visualGraph;
+    if (typeof vg !== 'object' || vg === null) return;
+    const postChain = (vg as Record<string, unknown>).postChain;
+    if (!Array.isArray(postChain)) return;
+    const hasGrade = postChain.some(
+      (n) => typeof n === 'object' && n !== null && (n as Record<string, unknown>).id === 'grade',
+    );
+    if (!hasGrade) {
+      postChain.push({
+        id: 'grade',
+        kind: 'postfx',
+        moduleId: 'grade',
+        params: { vignette: 0.22, warmth: 0, pulse: 0 },
+      });
+    }
   },
 };
 

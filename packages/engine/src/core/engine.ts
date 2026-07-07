@@ -2,7 +2,14 @@ import type { Patch, Scene, ModulationRoute } from '../patch/schema';
 import type { EngineOptions } from './types';
 import * as Tone from 'tone';
 import { Transport } from './transport';
-import { unlockAudio, resumeAudio, isAudioRunning, audioContextState } from '../audio/context';
+import {
+  unlockAudio,
+  resumeAudio,
+  isAudioRunning,
+  audioContextState,
+  setMonitorMuted,
+  isMonitorMuted,
+} from '../audio/context';
 import { SignalRegistry, type InputPortInfo, type OutputPortInfo } from './registry';
 import { Rng } from './rng';
 import { makePortRef, parsePortRef, type PortRef } from './ports';
@@ -173,6 +180,7 @@ export class Engine {
       this.patch.visualGraph.postChain.find((n) => n.id === id)?.params ?? {};
     const bloom = post('bloom');
     const grain = post('grain');
+    const grade = post('grade');
     return {
       moduleId: scene.shaderModuleId,
       nodeId: layerNode?.id ?? 'field',
@@ -183,6 +191,9 @@ export class Engine {
         bloomRadius: num(sv.bloomRadius, num(bloom.radius, 0.4)),
         bloomThreshold: num(sv.bloomThreshold, num(bloom.threshold, 0.85)),
         grainIntensity: num(sv.grainIntensity, num(grain.intensity, 0.05)),
+        vignette: num(sv.vignette, num(grade.vignette, 0.22)),
+        warmth: num(sv.warmth, num(grade.warmth, 0)),
+        pulse: num(sv.pulse, num(grade.pulse, 0)),
       },
     };
   }
@@ -444,6 +455,14 @@ export class Engine {
   }
   async resume(): Promise<boolean> {
     return resumeAudio();
+  }
+
+  /** Monitor mute — ephemeral, never written to the Patch (see audio/context). */
+  get monitorMuted(): boolean {
+    return isMonitorMuted();
+  }
+  setMonitorMuted(muted: boolean): void {
+    setMonitorMuted(muted);
   }
 
   get arcPosition(): number {

@@ -479,7 +479,7 @@
         <div><b>Author</b><span>Rob</span></div>
         <div><b>Reader</b><span>Ian</span></div>
         <div><b>Scope</b><span>v1 · the loop</span></div>
-        <div><b>Updated</b><span>11 Jun 2026</span></div>
+        <div><b>Updated</b><span>6 Jul 2026</span></div>
       </div>
     </div>
     <div class="masthead__cue"><span class="arrow">↓</span> scroll to descend</div>
@@ -699,7 +699,8 @@
       <h3><span class="h3-mark">→</span>Sequences enter the Patch — and migrations enter with them (schema v2)</h3>
       <p>The sequencer's authored state — per-scene step patterns with swing, per-step probability, ratchets and port-target tracks — is serialised in the Patch like any route (<code>patch/schema.ts</code>, <code>sequences</code>), because rule 1 admits no second home for authored state. Two structural choices ride along:</p>
       <ul class="body">
-        <li><strong>Real migrations.</strong> <code>meta.version</code> stops being decorative: <code>patch/migrate.ts</code> lifts older documents step-by-step (v1→v2 adds <code>sequences: []</code>) <em>before</em> zod validation, and every load path goes through it. Defaults handle missing fields; migrations handle reshaped ones. The steps are additive and idempotent, so a patch saved last month keeps loading forever.</li>
+        <li><strong>Real migrations.</strong> <code>meta.version</code> stops being decorative: <code>patch/migrate.ts</code> lifts older documents step-by-step (v1→v2 adds <code>sequences: []</code>, v2→v3 adds <code>presets: []</code>, v3→v4 appends the <code>grade</code> postfx node — vignette/warmth/pulse — to the postChain so studio edits to those ports have a node to persist into) <em>before</em> zod validation, and every load path goes through it. Defaults handle missing fields; migrations handle reshaped ones. The steps are additive and idempotent, so a patch saved last month keeps loading forever.</li>
+        <li><strong>Ephemeral monitor state stays out of the Patch.</strong> The studio's monitor mute (<code>audio/context.ts</code>, <code>setMonitorMuted</code>) silences Tone's destination without writing anything to the document. Rule 1 cuts both ways: the Patch is the single home for <em>authored</em> state, and a mixing-desk monitor cut is not authorship — saving it would make a patch sound different on load for no authored reason.</li>
         <li><strong>One clock, formalised.</strong> The transport grows into an explicit façade (<code>core/transport.ts</code>, <code>TransportClock</code>): bpm, time signature, musical position and a <code>scheduleWindow</code> lookahead pump that hands consumers the exact AudioContext time of each window — so the sequencer schedules sample-accurately through the same Tone transport the composer and the visual loop already read (rule 5), never via <code>setTimeout</code>. Control-rate writes gain a shared dezipper (<code>core/params.ts</code>, <code>smoothWrite</code>) so per-frame parameter moves glide instead of stepping.</li>
       </ul>
 

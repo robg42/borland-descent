@@ -19,21 +19,36 @@ import { createLayer, type VisualLayer } from './shaders';
  * (bloom strength/radius/threshold, grain) lerp across the fade.
  */
 
+// The film pass: grain plus the global GRADE surface (vignette / warmth /
+// pulse) folded into the same fullscreen pass — three more modulatable ports
+// for every scene at zero additional pass cost.
 const grainShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
     uAmount: { value: 0.25 },
     uTime: { value: 0 },
+    uVignette: { value: 0.22 },
+    uWarmth: { value: 0 },
+    uPulse: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
     void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
   `,
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform float uAmount; uniform float uTime; varying vec2 vUv;
+    uniform sampler2D tDiffuse;
+    uniform float uAmount, uTime, uVignette, uWarmth, uPulse;
+    varying vec2 vUv;
     float rnd(vec2 c){ return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }
     void main(){
       vec4 c = texture2D(tDiffuse, vUv);
+      // warmth: a print-stock colour cast, cool (-1) to warm (+1)
+      c.rgb *= vec3(1.0 + 0.14 * uWarmth, 1.0 + 0.03 * uWarmth, 1.0 - 0.16 * uWarmth);
+      // pulse: a route-able global luma lift — breath for the whole frame
+      c.rgb *= 1.0 + 0.30 * uPulse;
+      // vignette: the edges of the frame fall away
+      float d = distance(vUv, vec2(0.5));
+      c.rgb *= 1.0 - uVignette * smoothstep(0.32, 0.82, d);
       float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
       float g = rnd(vUv + fract(uTime)) * 2.0 - 1.0;
       // scale grain by luminance so blacks stay clean (film-like, not TV static)
@@ -62,6 +77,10 @@ export interface PostGrade {
   bloomRadius: number;
   bloomThreshold: number;
   grainIntensity: number;
+  /** The GRADE surface (vignette / warmth / pulse) — global, per-scene overridable. */
+  vignette: number;
+  warmth: number;
+  pulse: number;
 }
 
 export interface MountArgs {
@@ -237,6 +256,34 @@ export class VisualHost {
         this.grain.uniforms.uAmount!.value = clamp(v, 0, 0.6);
       },
     });
+    // the grade surface — every scene gains three more routable ports
+    registry.addInput(makePortRef('grade', 'vignette'), {
+      kind: 'unipolar',
+      base: grade.vignette,
+      min: 0,
+      max: 1,
+      write: (v) => {
+        this.grain.uniforms.uVignette!.value = clamp(v, 0, 1);
+      },
+    });
+    registry.addInput(makePortRef('grade', 'warmth'), {
+      kind: 'bipolar',
+      base: grade.warmth,
+      min: -1,
+      max: 1,
+      write: (v) => {
+        this.grain.uniforms.uWarmth!.value = clamp(v, -1, 1);
+      },
+    });
+    registry.addInput(makePortRef('grade', 'pulse'), {
+      kind: 'unipolar',
+      base: grade.pulse,
+      min: 0,
+      max: 1,
+      write: (v) => {
+        this.grain.uniforms.uPulse!.value = clamp(v, 0, 1);
+      },
+    });
   }
 
   /** Advance the crossfade (0..1): blend uniform + lerped post grade. */
@@ -250,6 +297,9 @@ export class VisualHost {
     this.bloom.radius = lerp(a.bloomRadius, b.bloomRadius, this.fadeMix);
     this.bloom.threshold = lerp(a.bloomThreshold, b.bloomThreshold, this.fadeMix);
     this.grain.uniforms.uAmount!.value = lerp(a.grainIntensity, b.grainIntensity, this.fadeMix);
+    this.grain.uniforms.uVignette!.value = lerp(a.vignette, b.vignette, this.fadeMix);
+    this.grain.uniforms.uWarmth!.value = lerp(a.warmth, b.warmth, this.fadeMix);
+    this.grain.uniforms.uPulse!.value = lerp(a.pulse, b.pulse, this.fadeMix);
   }
 
   /** Hand over: the incoming layer becomes active; the outgoing is disposed. */
@@ -275,6 +325,9 @@ export class VisualHost {
     this.bloom.radius = g.bloomRadius;
     this.bloom.threshold = g.bloomThreshold;
     this.grain.uniforms.uAmount!.value = g.grainIntensity;
+    this.grain.uniforms.uVignette!.value = g.vignette;
+    this.grain.uniforms.uWarmth!.value = g.warmth;
+    this.grain.uniforms.uPulse!.value = g.pulse;
   }
 
   private setChainSteady(): void {

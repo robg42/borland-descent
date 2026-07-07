@@ -2,7 +2,7 @@
   "meta": {
     "id": "borland",
     "name": "Borland — Surface",
-    "version": 3,
+    "version": 4,
     "createdAt": "2026-06-06T00:00:00.000Z",
     "updatedAt": "2026-06-11T00:00:00.000Z",
     "seed": 20260606
@@ -306,7 +306,8 @@
     ],
     "postChain": [
       { "id": "bloom", "kind": "postfx", "moduleId": "bloom", "params": { "strength": 0.9, "radius": 0.6, "threshold": 0.3 } },
-      { "id": "grain", "kind": "postfx", "moduleId": "filmGrain", "params": { "intensity": 0.05 } }
+      { "id": "grain", "kind": "postfx", "moduleId": "filmGrain", "params": { "intensity": 0.05 } },
+      { "id": "grade", "kind": "postfx", "moduleId": "grade", "params": { "vignette": 0.22, "warmth": 0, "pulse": 0 } }
     ]
   },
   "modulationMatrix": [
