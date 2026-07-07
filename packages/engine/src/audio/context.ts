@@ -37,6 +37,20 @@ export function isAudioRunning(): boolean {
   return Tone.getContext().state === 'running';
 }
 
+/**
+ * Monitor mute — silences Tone's destination without touching the Patch. This is
+ * EPHEMERAL monitor state (like a mixing desk's monitor cut), deliberately not
+ * authored data: saves never carry it, and it survives engine rebuilds because
+ * the destination node is Tone's page-wide singleton.
+ */
+export function setMonitorMuted(muted: boolean): void {
+  Tone.getDestination().mute = muted;
+}
+
+export function isMonitorMuted(): boolean {
+  return Tone.getDestination().mute;
+}
+
 /** Attempt to resume after an interruption/background. May fail on iOS Safari. */
 export async function resumeAudio(): Promise<boolean> {
   try {

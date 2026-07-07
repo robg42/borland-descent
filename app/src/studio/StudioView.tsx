@@ -29,6 +29,8 @@ export function StudioView() {
   const [sceneIndex, setSceneIndex] = useState(0);
   const [arc, setArc] = useState(0);
   const engine = useEngine(patch, container, patch ? 1 + reload : 0, { sceneIndex, initialArc: arc });
+  // dev-only debug handle: lets headless preview verification reach the engine
+  if (import.meta.env.DEV) (window as unknown as { __engine?: unknown }).__engine = engine;
 
   const [started, setStarted] = useState(false);
   const [busy, setBusy] = useState(false);
