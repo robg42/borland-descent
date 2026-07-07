@@ -21,6 +21,9 @@ import { createReef } from './reef';
 import { createPhysarum } from './physarum';
 import { createTrench } from './trench';
 import { createUndertow } from './undertow';
+import { createSnell } from './snell';
+import { createGyre } from './gyre';
+import { createSchool } from './school';
 import type { VisualLayer, VisualLayerFactory } from './types';
 
 /** Registry of visual layer modules by id. Scenes select their world by these keys.
@@ -57,9 +60,13 @@ const FACTORIES: Record<string, VisualLayerFactory> = {
   sonar: createSonar, // echolocation — a phosphor sweep and what answers it
   reef: createReef, // Gray–Scott reaction–diffusion — a grown, remembering reef
   // the depth series — stateful worlds: simulation, volume, memory
-  physarum: createPhysarum, // slime-mould colony — 25k agents drawing one organism
+  physarum: createPhysarum, // slime-mould colony — 65k agents drawing one organism
   trench: createTrench, // raymarched volume — a descent with true depth
   undertow: createUndertow, // video feedback — the frame remembering itself
+  // the open-water series — the sea itself: optics, currents, life
+  snell: createSnell, // Snell's window — the whole sky in one circle overhead
+  gyre: createGyre, // advected dye — fluid memory folding two inks for ever
+  school: createSchool, // flock — 16k fish holding station, detonating on the strike
 };
 
 export function createLayer(moduleId: string): VisualLayer {
