@@ -11,11 +11,17 @@ export interface EngineOptions {
   container?: HTMLElement;
   /** Override prefers-reduced-motion detection. */
   reducedMotion?: boolean;
-  /** Drive scene selection from the arc position (the player). The studio leaves this
-   *  off and selects scenes manually. */
+  /** Drive scene selection from the arc position (the player). The studio pins a
+   *  scene by default and enables this for its voyage (hear-the-piece) mode. */
   autoScene?: boolean;
-  /** Called when the active scene changes — the player fades in the scene's name. */
+  /** Called when a scene handover BEGINS (the crossfade announces the scene being
+   *  entered) — the player fades in the scene's name. */
   onSceneChange?: (scene: Scene) => void;
+  /** Called when a scene handover COMPLETES: the incoming scene's registry is now
+   *  the active one and its ports are addressable. Hosts that snapshot ports (the
+   *  studio's editors) must refresh HERE, not at onSceneChange — at fade start the
+   *  incoming ports are not yet the active registry. */
+  onSceneSettled?: (scene: Scene) => void;
 }
 
 export interface Disposable {

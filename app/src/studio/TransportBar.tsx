@@ -8,12 +8,15 @@ interface Props {
   playing: boolean;
   /** Monitor mute — owned by StudioView so the rail and the mobile console strip agree. */
   muted: boolean;
+  /** Voyage mode — the arc steers scenes and crossfades (autoScene), studio-wide state. */
+  voyage: boolean;
   arc: number;
   zones: ArcZone[];
   editingIndex: number;
   onBegin: () => void;
   onToggle: () => void;
   onMute: () => void;
+  onVoyage: () => void;
   onArc: (v: number) => void;
 }
 
@@ -23,12 +26,14 @@ export function TransportBar({
   busy,
   playing,
   muted,
+  voyage,
   arc,
   zones,
   editingIndex,
   onBegin,
   onToggle,
   onMute,
+  onVoyage,
   onArc,
 }: Props) {
   return (
@@ -51,6 +56,15 @@ export function TransportBar({
         aria-pressed={muted}
       >
         mute
+      </button>
+      <button
+        className={`btn${voyage ? ' btn--held' : ''}`}
+        onClick={onVoyage}
+        disabled={!engine}
+        aria-pressed={voyage}
+        title="voyage: the arc steers scenes and crossfades, as a listener hears the piece"
+      >
+        voyage
       </button>
       <div className="transport__arc">
         <span className="ctl__name">

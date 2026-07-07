@@ -6,6 +6,7 @@ interface EngineBuildOpts {
   initialArc?: number;
   autoScene?: boolean;
   onSceneChange?: (scene: Scene) => void;
+  onSceneSettled?: (scene: Scene) => void;
 }
 
 /**
@@ -48,6 +49,7 @@ export function useEngine(
         initialArc: optsRef.current?.initialArc,
         autoScene: optsRef.current?.autoScene,
         onSceneChange: optsRef.current?.onSceneChange,
+        onSceneSettled: optsRef.current?.onSceneSettled,
       });
       setEngine(instance);
     });

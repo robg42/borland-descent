@@ -45,6 +45,7 @@ export class Engine {
   private activeIndex: number;
   private readonly autoScene: boolean;
   private readonly onSceneChange?: (scene: Scene) => void;
+  private readonly onSceneSettled?: (scene: Scene) => void;
   private registry = new SignalRegistry();
   private readonly transport = new Transport();
   private readonly rng: Rng;
@@ -106,6 +107,7 @@ export class Engine {
     if (opts.patch.scenes.length === 0) throw new Error('Patch has no scenes');
     this.autoScene = opts.autoScene ?? false;
     this.onSceneChange = opts.onSceneChange;
+    this.onSceneSettled = opts.onSceneSettled;
     this.routes = opts.patch.modulationMatrix;
     this.rng = new Rng(opts.patch.meta.seed);
     this.manualArc = Math.min(1, Math.max(0, opts.initialArc ?? 0));
@@ -373,6 +375,7 @@ export class Engine {
     this.matrix = new Matrix(routesForScene(this.routes, this.scene.id), this.registry);
     this.matrix.setup();
     this.sequencer?.setRegistry(this.registry); // port tracks follow the handover
+    this.onSceneSettled?.(this.scene); // ports are live NOW — hosts may re-snapshot
   }
 
   /** Abandon an in-flight crossfade (build failure) — keep the outgoing scene. */

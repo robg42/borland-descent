@@ -558,6 +558,22 @@ body:has(.studio) {
   }
 }
 
+/* honest touch sizing where fingers are the pointer — visuals unchanged on desktop */
+@media (pointer: coarse) {
+  .studio .btn--icon {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+  }
+  .studio .btn,
+  .studio select.field {
+    min-height: 2.4rem;
+  }
+  .seq__cell {
+    flex-basis: 26px;
+    height: 38px;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .studio__rail {
     animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;

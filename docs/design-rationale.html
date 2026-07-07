@@ -479,7 +479,7 @@
         <div><b>Author</b><span>Rob</span></div>
         <div><b>Reader</b><span>Ian</span></div>
         <div><b>Scope</b><span>v1 · the loop</span></div>
-        <div><b>Updated</b><span>6 Jul 2026</span></div>
+        <div><b>Updated</b><span>7 Jul 2026</span></div>
       </div>
     </div>
     <div class="masthead__cue"><span class="arrow">↓</span> scroll to descend</div>
@@ -735,6 +735,7 @@
 
       <h3><span class="h3-mark">→</span>The engine as a host; a scene as a unit</h3>
       <p>The engine does not own a scene's audio and visuals directly — it <em>hosts</em> them. A <code>SceneInstance</code> bundles one scene's audio graph and visual stack and registers their ports; the <code>Engine</code> keeps only the shared, scene-independent concerns — the one transport, the gesture input, the port registry, the modulation matrix and a single master bus — and drives the active instance each frame. Each scene feeds that master through <em>its own output gain</em>; today exactly one does. But that is precisely what turns the two deferred features needing a scene to be a movable unit — a crossfade that runs two scenes at once, and an arc that hands off from one scene to the next — into the host holding a <em>second</em> instance and ramping the two gains against each other, rather than a rewrite of the engine's core. Draw the line before code leans on the engine owning a single scene, not after.</p>
+      <p><strong>Handover is a two-phase lifecycle.</strong> A scene change is announced twice: <code>onSceneChange</code> fires when the crossfade <em>begins</em> (the player fades in the incoming scene's name), and <code>onSceneSettled</code> fires when it <em>completes</em> — the moment the incoming registry becomes the active one and its ports are addressable. The distinction is load-bearing for any host that snapshots ports: the studio's voyage mode (the arc steers scenes exactly as a listener hears them) refreshes its editors at settle, because refreshing at announce would read the outgoing scene's registry mid-fade.</p>
 
       <h3><span class="h3-mark">→</span>The audio lifecycle, and the still first frame</h3>
       <p>There is exactly one <code>AudioContext</code> for the page — Tone owns it, and we never construct a second (Safari caps them at roughly four). It can only be unlocked from a user gesture, so the player opens on a <em>still, inviting first frame</em>: visuals and gesture are built up front and rendered once; audio is built only when you tap to begin. On iOS the context can be interrupted by backgrounding, so there is an explicit “tap to resume” path. These are the difference between “it works on my laptop” and “it works on a phone on the train”.</p>

@@ -47,13 +47,16 @@ export const SequencerPanel = memo(function SequencerPanel({ sequences, inputs, 
   const [selSeq, setSelSeq] = useState(0);
   const [selStep, setSelStep] = useState<number | null>(null);
 
-  const seq = sequences[selSeq] ?? null;
+  // Clamped at render: a patch import (or external edit) can shrink the list under
+  // a remembered selection, which would silently edit the wrong sequence.
+  const sel = Math.min(selSeq, Math.max(0, sequences.length - 1));
+  const seq = sequences[sel] ?? null;
 
   const updateSeq = useCallback(
     (update: Partial<Sequence>) => {
-      onChange(sequences.map((s, i) => (i === selSeq ? { ...s, ...update } : s)));
+      onChange(sequences.map((s, i) => (i === sel ? { ...s, ...update } : s)));
     },
-    [selSeq, sequences, onChange],
+    [sel, sequences, onChange],
   );
 
   const updateStep = useCallback(
@@ -73,11 +76,11 @@ export const SequencerPanel = memo(function SequencerPanel({ sequences, inputs, 
   }, [sequences, onChange]);
 
   const deleteSeq = useCallback(() => {
-    const next = sequences.filter((_, i) => i !== selSeq);
+    const next = sequences.filter((_, i) => i !== sel);
     onChange(next);
-    setSelSeq(Math.min(selSeq, Math.max(0, next.length - 1)));
+    setSelSeq(Math.min(sel, Math.max(0, next.length - 1)));
     setSelStep(null);
-  }, [selSeq, sequences, onChange]);
+  }, [sel, sequences, onChange]);
 
   const toggleStep = useCallback(
     (si: number) => {
@@ -96,7 +99,7 @@ export const SequencerPanel = memo(function SequencerPanel({ sequences, inputs, 
         {sequences.map((s, i) => (
           <button
             key={s.id}
-            className={`seq__tab${i === selSeq ? ' seq__tab--sel' : ''}`}
+            className={`seq__tab${i === sel ? ' seq__tab--sel' : ''}`}
             onClick={() => {
               setSelSeq(i);
               setSelStep(null);
@@ -185,6 +188,21 @@ export const SequencerPanel = memo(function SequencerPanel({ sequences, inputs, 
                 step={0.01}
                 value={seq.gate}
                 onChange={(e) => updateSeq({ gate: Number(e.target.value) })}
+              />
+            </label>
+            <label className="seq__fg">
+              <span className="seq__fl">human</span>
+              <input
+                type="number"
+                className="field"
+                min={0}
+                max={250}
+                step={5}
+                title="humanise: laid-back timing scatter per step, ms (deterministic per seed)"
+                value={seq.humanizeMs}
+                onChange={(e) =>
+                  updateSeq({ humanizeMs: Math.max(0, Math.min(250, Number(e.target.value) || 0)) })
+                }
               />
             </label>
           </div>

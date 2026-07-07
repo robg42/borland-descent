@@ -5,6 +5,7 @@ import {
   VISUAL_MODULE_IDS,
   type ModulationRoute,
   type Patch,
+  type Scene,
   type Sequence,
 } from '@borland/engine';
 import { useEngine } from '../engineReact/useEngine';
@@ -49,7 +50,43 @@ export function StudioView() {
   const [arc, setArc] = useState(0);
   const [bpm, setBpm] = useState(0);
   const [tab, setTab] = useState<TabId>('params');
-  const engine = useEngine(patch, container, patch ? 1 + reload : 0, { sceneIndex, initialArc: arc });
+  /** Voyage: the studio hears the PIECE — the arc steers scenes and crossfades run,
+   *  exactly as a listener gets them. Off = the default pinned-scene editing mode. */
+  const [voyage, setVoyage] = useState(false);
+  /** Name of the scene a voyage crossfade is entering (null when settled). */
+  const [incomingName, setIncomingName] = useState<string | null>(null);
+
+  // The engine captures these callbacks for its lifetime — they read live state
+  // through refs so a mid-session crossfade never sees a stale snapshot.
+  const scenesRef = useRef<Scene[]>([]);
+  scenesRef.current = patch?.scenes ?? [];
+  const sceneIndexRef = useRef(0);
+  sceneIndexRef.current = sceneIndex;
+
+  const handleSceneChange = useCallback((scene: Scene) => {
+    // start() announces the already-active scene; only a genuine handover shows "→"
+    setIncomingName(scenesRef.current[sceneIndexRef.current]?.id === scene.id ? null : scene.name);
+  }, []);
+
+  const handleSceneSettled = useCallback((scene: Scene) => {
+    // The handover is done: the new scene's ports ARE the active registry now.
+    // Sync the pinned index (so voyage-off keeps you where you landed) and
+    // re-snapshot every port-driven editor.
+    setSceneIndex((prev) => {
+      const i = scenesRef.current.findIndex((s) => s.id === scene.id);
+      return i >= 0 ? i : prev;
+    });
+    setIncomingName(null);
+    setTick((t) => t + 1);
+  }, []);
+
+  const engine = useEngine(patch, container, patch ? 1 + reload : 0, {
+    sceneIndex,
+    initialArc: arc,
+    autoScene: voyage,
+    onSceneChange: handleSceneChange,
+    onSceneSettled: handleSceneSettled,
+  });
 
   const [started, setStarted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -182,6 +219,14 @@ export function StudioView() {
   const selectScene = useCallback((index: number) => {
     setSceneIndex(index);
     setReload((r) => r + 1); // rebuild the engine for the chosen scene
+  }, []);
+
+  const toggleVoyage = useCallback(() => {
+    // Rebuild with autoScene flipped; sceneIndex already tracks the last settled
+    // scene, so leaving the voyage pins exactly where the descent left you.
+    setVoyage((v) => !v);
+    setIncomingName(null);
+    setReload((r) => r + 1);
   }, []);
 
   // Re-snapshot on tab switches too: with one editor mounted at a time, a params
@@ -368,12 +413,14 @@ export function StudioView() {
             busy={busy}
             playing={playing}
             muted={muted}
+            voyage={voyage}
             arc={arc}
             zones={zones}
             editingIndex={sceneIndex}
             onBegin={begin}
             onToggle={toggle}
             onMute={onMute}
+            onVoyage={toggleVoyage}
             onArc={onArc}
           />
 
@@ -395,7 +442,11 @@ export function StudioView() {
             </div>
             <div className="gauge">
               <dt className="gauge__label">zone</dt>
-              <dd className="gauge__value gauge__value--name">{scenes[sceneIndex]?.name ?? '—'}</dd>
+              <dd className="gauge__value gauge__value--name">
+                {incomingName
+                  ? `${scenes[sceneIndex]?.name ?? '—'} → ${incomingName}`
+                  : (scenes[sceneIndex]?.name ?? '—')}
+              </dd>
             </div>
             <div className="gauge">
               <dt className="gauge__label">tempo</dt>
@@ -409,10 +460,12 @@ export function StudioView() {
           <div className="rail__pickers">
             {scenes.length > 1 && (
               <label className="rail__picker">
-                <span className="rail__pickerLabel">editing</span>
+                <span className="rail__pickerLabel">{voyage ? 'live' : 'editing'}</span>
                 <select
                   className="field"
                   value={sceneIndex}
+                  disabled={voyage}
+                  title={voyage ? 'the voyage steers the scene; end it to pin one' : undefined}
                   onChange={(e) => selectScene(Number(e.target.value))}
                 >
                   {scenes.map((s, i) => (
@@ -478,6 +531,15 @@ export function StudioView() {
               title="monitor mute: silences the output without touching the patch"
             >
               mute
+            </button>
+            <button
+              className={`btn${voyage ? ' btn--held' : ''}`}
+              onClick={toggleVoyage}
+              disabled={!engine}
+              aria-pressed={voyage}
+              title="voyage: the arc steers scenes and crossfades, as a listener hears the piece"
+            >
+              voyage
             </button>
             <ArcTrack value={arc} zones={zones} editingIndex={sceneIndex} onChange={onArc} />
             <span className="console__depth" aria-hidden>
