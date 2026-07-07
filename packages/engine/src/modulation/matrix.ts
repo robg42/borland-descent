@@ -32,6 +32,8 @@ export class Matrix {
    *  are excluded from per-target smoothing so the attack stays instant. */
   private readonly triggerRouteIds = new Set<string>();
   private readonly triggerEnv = new Map<string, number>();
+  /** Reused per-frame scratch for evaluateControlTargets (avoids a Map per frame). */
+  private readonly targetScratch = new Map<string, number>();
 
   constructor(
     private readonly routes: ModulationRoute[],
@@ -102,6 +104,7 @@ export class Matrix {
           ? this.triggerEnv.get(route.id)
           : this.registry.getOutput(route.source)?.read(),
       (ref) => this.registry.getInput(ref)?.base,
+      this.targetScratch,
     );
     for (const [ref, raw] of targets) {
       const inp = this.registry.getInput(ref);

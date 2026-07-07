@@ -13,8 +13,12 @@ export function evaluateControlTargets(
   routes: ModulationRoute[],
   readSource: (route: ModulationRoute) => number | undefined,
   baseOf: (ref: string) => number | undefined,
+  out?: Map<string, number>,
 ): Map<string, number> {
-  const targets = new Map<string, number>();
+  // A caller-owned `out` map is cleared and reused — the Matrix runs this every
+  // frame, so allocating a fresh Map per call is avoidable GC pressure.
+  const targets = out ?? new Map<string, number>();
+  targets.clear();
   for (const r of routes) {
     if (r.enabled === false || r.rate !== 'control') continue;
     const src = readSource(r);

@@ -66,12 +66,14 @@ export interface OnsetState {
   history: Float32Array;
   index: number;
   filled: number;
+  /** Running sum of the ring buffer, so the adaptive mean is O(1) per frame. */
+  sum: number;
   /** Seconds since the last fired onset (refractory timer). */
   sinceLast: number;
 }
 
 export function createOnsetState(historyLength = 32): OnsetState {
-  return { history: new Float32Array(historyLength), index: 0, filled: 0, sinceLast: 1 };
+  return { history: new Float32Array(historyLength), index: 0, filled: 0, sum: 0, sinceLast: 1 };
 }
 
 /**
@@ -90,12 +92,13 @@ export function onsetStep(
   const floor = opts.floor ?? 0.015;
   const refractory = opts.refractorySec ?? 0.12;
 
-  let mean = 0;
-  const n = Math.max(1, state.filled);
-  for (let i = 0; i < state.filled; i++) mean += state.history[i]!;
-  mean /= n;
+  const mean = state.sum / Math.max(1, state.filled);
 
+  // Maintain the running sum against the STORED (float32-rounded) values so it
+  // stays exactly the sum of the ring buffer's contents.
+  state.sum -= state.history[state.index]!;
   state.history[state.index] = flux;
+  state.sum += state.history[state.index]!;
   state.index = (state.index + 1) % state.history.length;
   state.filled = Math.min(state.filled + 1, state.history.length);
   state.sinceLast += dt;
