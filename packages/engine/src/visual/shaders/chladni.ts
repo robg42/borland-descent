@@ -22,6 +22,10 @@ export const descriptor: VisualModuleDescriptor = {
     { key: 'pitch', kind: 'bipolar', min: -1, max: 1, default: 0.15, group: 'scene' },
     // route audio.onset here: a strike scatters the sand; it resettles as it decays
     { key: 'strike', kind: 'unipolar', min: 0, max: 1, default: 0, group: 'scene' },
+    // square plate at 0 — circular (radial/diametric) modes at 1
+    { key: 'symmetry', kind: 'unipolar', min: 0, max: 1, default: 0.2, group: 'scene' },
+    // which plate this is — offsets every phase and grain so no two patches match
+    { key: 'seed', kind: 'scalar', min: 0, max: 100, default: 17, group: 'scene' },
   ],
 };
 
@@ -30,23 +34,36 @@ const vertexShader = glslVertex;
 // Figures — the cymatics plate (Chladni lineage): the whole frame is a bowed
 // steel plate and the picture is sand, gathering where the plate stands still.
 // The standing wave has two mode numbers; pitch detunes one against the other
-// and the figure walks smoothly through shapes no integer mode ever held. A
-// strike throws the sand off the nodal lines and the figure re-forms as the
-// blow rings out. The arc is the bow lifting: the plate holds its figure more
-// and more loosely — lines widen, grains wander — until the sand is only dust
-// on dark steel.
+// and the figure walks smoothly through shapes no integer mode ever held; a
+// second, quieter mode pair breathes underneath so the figure never fully
+// settles. Symmetry re-clamps the plate from square (Cartesian modes) to
+// circular (radial rings crossed by diametric lines). A strike throws the
+// sand off the nodal lines and the figure re-forms as the blow rings out.
+// The arc is the bow lifting: the plate holds its figure more and more
+// loosely — lines widen, grains wander — until the sand is dust on dark steel.
 const fragmentShader = /* glsl */ `
   precision highp float;
   ${glslCommon}
   uniform float uTime;
   uniform vec2 uResolution;
-  uniform float uFog, uFlow, uDepth, uDark, uPitch, uStrike;
+  uniform float uFog, uFlow, uDepth, uDark, uPitch, uStrike, uSymmetry, uSeed;
   varying vec2 vUv;
+
+  // square-plate standing wave (antisymmetric Cartesian mode)
+  float plateSq(vec2 p, float m, float n){
+    return cos(m * p.x) * cos(n * p.y) - cos(n * p.x) * cos(m * p.y);
+  }
+  // circular-plate figure: radial rings crossed by diametric node lines
+  float plateCirc(vec2 p, float m, float n){
+    float r = length(p);
+    float th = atan(p.y, p.x);
+    return cos(r * m * 1.35) * cos(th * floor(n * 0.75 + 0.5));
+  }
 
   void main(){
     float aspect = uResolution.x / max(uResolution.y, 1.0);
     vec2 pc = (vUv - 0.5) * vec2(aspect, 1.0);
-    float t = uTime * (0.4 + uFlow * 1.2);
+    float t = uTime * (0.4 + uFlow * 1.2) + uSeed * 7.31;
 
     // the two mode numbers — continuous, so the figure walks between shapes
     float n = mix(2.5, 7.5, uDepth) + 0.35 * sin(t * 0.11);
@@ -56,13 +73,20 @@ const fragmentShader = /* glsl */ `
     float scatter = uStrike * 0.06 + uDark * 0.02;
     vec2 p = pc * 3.14159 + scatter * (hash2(pc * 57.0 + floor(t * 7.0)) - 0.5) * 2.0;
 
-    // the standing wave (antisymmetric square-plate mode)
-    float s = cos(m * p.x) * cos(n * p.y) - cos(n * p.x) * cos(m * p.y);
+    // the sounding mode, square or circular clamping — plus a quieter second
+    // pair a fifth up, breathing underneath, so the figure never fully settles
+    float s1 = mix(plateSq(p, m, n), plateCirc(p, m * 2.2, n), smoothstep(0.15, 0.85, uSymmetry));
+    float s2 = mix(plateSq(p, m * 1.5, n * 1.5), plateCirc(p, m * 3.1, n * 1.5),
+                   smoothstep(0.15, 0.85, uSymmetry));
+    float duet = 0.30 + 0.22 * sin(t * 0.05 + uSeed);
+    float s = s1 + s2 * duet;
 
     // sand gathers on the nodal lines; the bow lifting widens and dims them
     float hold = mix(9.0, 3.0, uDark);
     float line = exp(-abs(s) * hold);
-    float grain = 0.50 + 0.50 * noise(pc * 150.0 + hash2(vec2(floor(t * 5.0))).x * 4.0);
+    // two-scale grain: coarse piles and the fine dust riding on them
+    float grain = 0.42 + 0.58 * (0.6 * noise(pc * 150.0 + uSeed)
+                               + 0.4 * noise(pc * 420.0 + floor(t * 5.0)));
     float sand = line * grain * (1.0 + uStrike * 0.8);
 
     // where the plate moves hardest it hums — a breath of teal off the steel

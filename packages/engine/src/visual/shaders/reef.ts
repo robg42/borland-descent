@@ -24,6 +24,10 @@ export const descriptor: VisualModuleDescriptor = {
     { key: 'spore', kind: 'unipolar', min: 0, max: 1, default: 0, group: 'scene' },
     // route fft.high here: light plays on the living growth fronts
     { key: 'glint', kind: 'unipolar', min: 0, max: 1, default: 0.35, group: 'scene' },
+    // a slow tide through the bath — the whole reef leans downstream
+    { key: 'current', kind: 'unipolar', min: 0, max: 1, default: 0.15, group: 'scene' },
+    // which bath this is; CHANGING it re-seeds the reef live and it regrows
+    { key: 'seed', kind: 'scalar', min: 0, max: 100, default: 7, group: 'scene' },
   ],
   capabilities: {
     feedback: true, // self-managed ping-pong — the sim lives in two private targets
@@ -36,31 +40,39 @@ export const descriptor: VisualModuleDescriptor = {
 // GROWN — colonies branch, collide and heal, and no frame can be recomputed
 // from a clock because the pattern is its own history. Growth moves the
 // chemistry along the Pearson band from solitary spots to branching coral; a
-// transient drops a spore that becomes a new colony. The arc starves the
-// bath: the feed rate falls with the dark and the reef dissolves from its
-// thinnest branches inward — a decay you cannot rewind.
+// transient drops a spore that becomes a new colony; current is a slow tide
+// that leans the whole reef downstream as it grows. Seed picks the bath —
+// changing it live razes the reef and it regrows from new ground. The arc
+// starves the bath: the feed rate falls with the dark and the reef dissolves
+// from its thinnest branches inward — a decay you cannot rewind.
 
 const SIM_RES = 256;
+const ZERO2 = new THREE.Vector2(0, 0);
 
 const simFragment = /* glsl */ `
   precision highp float;
   uniform sampler2D uPrev;
   uniform vec2 uTexel;
+  uniform vec2 uAdvect; // whole-texel shift, first step of each frame only
   uniform float uGrowth, uSpore, uDark, uSeedTick;
   varying vec2 vUv;
 
   void main(){
-    vec2 c = texture2D(uPrev, vUv).rg;
+    // the tide: a whole-texel upstream shift (accumulated on the CPU) so every
+    // tap still lands on an exact texel centre — fractional offsets would add
+    // bilinear smear to BOTH chemicals and starve the pattern to nothing
+    vec2 uv = vUv + uAdvect;
+    vec2 c = texture2D(uPrev, uv).rg;
     // 9-point Laplacian; RepeatWrapping makes the bath a torus
     vec2 lap = -c
-      + 0.20 * texture2D(uPrev, vUv + vec2( uTexel.x, 0.0)).rg
-      + 0.20 * texture2D(uPrev, vUv + vec2(-uTexel.x, 0.0)).rg
-      + 0.20 * texture2D(uPrev, vUv + vec2(0.0,  uTexel.y)).rg
-      + 0.20 * texture2D(uPrev, vUv + vec2(0.0, -uTexel.y)).rg
-      + 0.05 * texture2D(uPrev, vUv + uTexel).rg
-      + 0.05 * texture2D(uPrev, vUv - uTexel).rg
-      + 0.05 * texture2D(uPrev, vUv + vec2(uTexel.x, -uTexel.y)).rg
-      + 0.05 * texture2D(uPrev, vUv + vec2(-uTexel.x, uTexel.y)).rg;
+      + 0.20 * texture2D(uPrev, uv + vec2( uTexel.x, 0.0)).rg
+      + 0.20 * texture2D(uPrev, uv + vec2(-uTexel.x, 0.0)).rg
+      + 0.20 * texture2D(uPrev, uv + vec2(0.0,  uTexel.y)).rg
+      + 0.20 * texture2D(uPrev, uv + vec2(0.0, -uTexel.y)).rg
+      + 0.05 * texture2D(uPrev, uv + uTexel).rg
+      + 0.05 * texture2D(uPrev, uv - uTexel).rg
+      + 0.05 * texture2D(uPrev, uv + vec2(uTexel.x, -uTexel.y)).rg
+      + 0.05 * texture2D(uPrev, uv + vec2(-uTexel.x, uTexel.y)).rg;
 
     // the Pearson band: solitary spots -> branching coral; the dark starves it
     float feed = mix(0.030, 0.058, uGrowth) * (1.0 - 0.90 * uDark);
@@ -85,13 +97,15 @@ const simFragment = /* glsl */ `
 const seedFragment = /* glsl */ `
   precision highp float;
   ${glslCommon}
+  uniform float uSeed;
   varying vec2 vUv;
 
   void main(){
     // a full bath of A with a few settled patches of B to grow from
-    float n = noise(vUv * 7.0) * 0.7 + noise(vUv * 19.0) * 0.3;
+    float n = noise(vUv * 7.0 + uSeed) * 0.7 + noise(vUv * 19.0 - uSeed) * 0.3;
     float B = smoothstep(0.72, 0.80, n) * 0.5;
-    float d2 = dot(vUv - 0.5, vUv - 0.5);
+    vec2 sp = fract(vec2(sin(uSeed * 12.9898), sin(uSeed * 78.233)) * 43758.5453);
+    float d2 = dot(vUv - mix(vec2(0.5), sp, 0.7), vUv - mix(vec2(0.5), sp, 0.7));
     B += 0.5 * exp(-d2 * 900.0);
     gl_FragColor = vec4(1.0, min(B, 1.0), 0.0, 1.0);
   }
@@ -117,20 +131,27 @@ const displayFragment = /* glsl */ `
              - texture2D(uState, st - vec2(0.0, uTexel.y)).g;
     float front = length(vec2(bx, by));
 
-    // the grown mass, lit shallowly from the upper left
+    // the grown mass, lit shallowly from the upper left; crevices self-shadow
     float body = smoothstep(0.10, 0.34, B);
     float shade = clamp(0.62 + 6.0 * (-bx * 0.7 + by * 0.7), 0.25, 1.35);
+    shade *= 1.0 - 0.35 * smoothstep(0.30, 0.52, B);
 
-    // light plays on the living edge; a slow shimmer sweeps the fronts
+    // light on the living edge: the front's own facing angle picks its colour,
+    // teal on one flank rolling to a dusk violet-rose on the other, with a
+    // slow shimmer sweeping through
+    float facing = atan(by, bx);
     float shimmer = 0.6 + 0.4 * sin(uTime * 0.4 + (st.x + st.y) * 18.0);
+    float hueT = 0.5 + 0.5 * sin(facing + uTime * 0.10);
+    vec3 teal = vec3(0.16, 0.40, 0.38);
+    vec3 dusk = vec3(0.36, 0.26, 0.38);
+    vec3 edgeCol = mix(teal, dusk, hueT);
     float glow = front * 5.0 * uGlint * shimmer;
 
     vec3 water = vec3(0.007, 0.012, 0.016);
     vec3 bone = vec3(0.50, 0.44, 0.36);
-    vec3 teal = vec3(0.16, 0.40, 0.38);
     vec3 col = water
              + bone * body * shade * (1.0 - 0.70 * uDark)
-             + teal * glow * (1.0 - 0.55 * uDark);
+             + edgeCol * glow * (1.0 - 0.55 * uDark);
     col += uFog * 0.035 * vec3(0.16, 0.22, 0.25);
     col *= 1.0 - 0.40 * uDark;
 
@@ -168,18 +189,25 @@ class ReefPass extends Pass {
     uGrowth: { value: 0.6 },
     uSpore: { value: 0 },
     uGlint: { value: 0.35 },
+    uCurrent: { value: 0.15 },
+    uSeed: { value: 7 },
     uResolution: { value: new THREE.Vector2(1, 1) },
   };
 
   private readonly simTexel = new THREE.Vector2(1 / SIM_RES, 1 / SIM_RES);
+  private readonly advect = new THREE.Vector2(0, 0); // this frame's texel shift
+  private readonly advCarry = new THREE.Vector2(0, 0); // sub-texel remainder
+  private lastTime = 0;
   private simA = makeSimTarget();
   private simB = makeSimTarget();
   private seeded = false;
+  private lastSeed = NaN; // NaN ≠ anything → the first render always seeds
 
   private readonly simMaterial = new THREE.ShaderMaterial({
     uniforms: {
       uPrev: { value: null },
       uTexel: { value: this.simTexel },
+      uAdvect: { value: this.advect },
       uGrowth: this.uniforms.uGrowth!,
       uSpore: this.uniforms.uSpore!,
       uDark: this.uniforms.uDark!,
@@ -192,6 +220,9 @@ class ReefPass extends Pass {
   });
 
   private readonly seedMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      uSeed: { value: 7 },
+    },
     vertexShader: glslVertex,
     fragmentShader: seedFragment,
     depthTest: false,
@@ -221,6 +252,13 @@ class ReefPass extends Pass {
     renderer: THREE.WebGLRenderer,
     writeBuffer: THREE.WebGLRenderTarget,
   ): void {
+    // a changed seed razes the bath — the reef regrows from new ground
+    const seed = this.uniforms.uSeed!.value as number;
+    if (seed !== this.lastSeed) {
+      this.lastSeed = seed;
+      this.seedMaterial.uniforms.uSeed!.value = seed;
+      this.seeded = false;
+    }
     if (!this.seeded) {
       this.quad.material = this.seedMaterial;
       renderer.setRenderTarget(this.simA);
@@ -233,6 +271,9 @@ class ReefPass extends Pass {
     const steps = 1 + Math.round(clamp(flow, 0, 1) * 5);
     this.quad.material = this.simMaterial;
     for (let i = 0; i < steps; i++) {
+      // the tide's whole-texel shift rides the first step only; later steps
+      // (and the carry that hasn't reached a full texel) sample in place
+      this.simMaterial.uniforms.uAdvect!.value = i === 0 ? this.advect : ZERO2;
       this.simMaterial.uniforms.uPrev!.value = this.simA.texture;
       renderer.setRenderTarget(this.simB);
       this.quad.render(renderer);
@@ -247,10 +288,24 @@ class ReefPass extends Pass {
     this.quad.render(renderer);
   }
 
-  /** Advance the spore clock — a settled spore keeps its spot for ~1.4 s. */
+  /** Advance the spore clock and turn the tide (a spore keeps its spot ~1.4 s). */
   setTime(timeSec: number): void {
     this.uniforms.uTime!.value = timeSec;
     this.simMaterial.uniforms.uSeedTick!.value = Math.floor(timeSec * 0.7) + 1;
+    // the tide: accumulate drift in texels and bank whole texels into this
+    // frame's shift — the wheel turns fully in ~4.5 minutes
+    const dt = clamp(timeSec - this.lastTime, 0, 0.25);
+    this.lastTime = timeSec;
+    const current = this.uniforms.uCurrent!.value as number;
+    const th = timeSec * 0.023 + (this.lastSeed || 0);
+    const texelsPerSec = 14 * clamp(current, 0, 1);
+    this.advCarry.x += Math.cos(th) * texelsPerSec * dt;
+    this.advCarry.y += Math.sin(th) * texelsPerSec * dt;
+    const sx = Math.trunc(this.advCarry.x);
+    const sy = Math.trunc(this.advCarry.y);
+    this.advCarry.x -= sx;
+    this.advCarry.y -= sy;
+    this.advect.set(sx * this.simTexel.x, sy * this.simTexel.y);
   }
 
   override dispose(): void {
