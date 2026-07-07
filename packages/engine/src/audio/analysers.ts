@@ -23,6 +23,17 @@ const FLUX_ATTACK_SEC = 0.01;
 const FLUX_RELEASE_SEC = 0.15;
 
 /**
+ * FFT bins (Tone.FFT `size`; the underlying AnalyserNode fftSize is 2×this — 512,
+ * the floor of the project's documented 512–1024 budget). At 64 bins a bin was
+ * ~375 Hz wide at 48 kHz, so everything below 375 Hz — the whole sub-bass — was
+ * invisible to the feature bands. 256 bins (~94 Hz) give band1/band2 real bass to
+ * react to for one 512-point transform per frame.
+ */
+const FFT_BINS = 256;
+/** Top of the analysed range as a fraction of the bins (~18 kHz), as before. */
+const FFT_TOP = 0.75;
+
+/**
  * Signal-output measurements for the modulation matrix. The legacy trio —
  * master/bass RMS and the coarse fft.low/mid/high bands — is unchanged so every
  * existing route keeps working. V2 adds the FEATURE layer on the same FFT tap:
@@ -34,11 +45,11 @@ const FLUX_RELEASE_SEC = 0.15;
 export class Analysers {
   readonly masterMeter = new Tone.Meter({ normalRange: true, smoothing: 0.85 });
   readonly bassMeter = new Tone.Meter({ normalRange: true, smoothing: 0.8 });
-  readonly fft = new Tone.FFT({ size: 64, smoothing: 0.7 });
+  readonly fft = new Tone.FFT({ size: FFT_BINS, smoothing: 0.7 });
 
-  private readonly mags = new Float32Array(64);
-  private readonly prevMags = new Float32Array(64);
-  private readonly bandEdges = logBandEdges(FEATURE_BANDS, 1, 48);
+  private readonly mags = new Float32Array(FFT_BINS);
+  private readonly prevMags = new Float32Array(FFT_BINS);
+  private readonly bandEdges = logBandEdges(FEATURE_BANDS, 1, Math.round(FFT_BINS * FFT_TOP));
   private readonly bandEnv = new Float32Array(FEATURE_BANDS);
   private readonly onset: OnsetState = createOnsetState();
   private binsDb: Float32Array | null = null;

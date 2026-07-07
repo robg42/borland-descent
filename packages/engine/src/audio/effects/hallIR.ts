@@ -9,7 +9,18 @@ export function generateHallIR(
   sampleRate: number,
   decaySec: number,
   preDelaySec = 0.02,
+  seed = 0x5eed,
 ): Float32Array[] {
+  // Seeded noise (mulberry32) so the same params always produce the SAME room —
+  // rebuilding a scene must not subtly change its reverb (determinism), and it
+  // lets callers cache the generated IR by its parameters.
+  let s = seed >>> 0;
+  const rand = (): number => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
   const pre = Math.max(0, Math.floor(preDelaySec * sampleRate));
   const tail = Math.max(1, Math.floor(Math.max(0.1, decaySec) * sampleRate));
   const len = pre + tail;
@@ -31,7 +42,7 @@ export function generateHallIR(
     for (let i = 0; i < tail; i++) {
       const t = i / tail; // 0..1 through the tail
       const env = Math.pow(1 - t, 2.2); // smooth exponential-ish decay
-      const noise = Math.random() * 2 - 1;
+      const noise = rand() * 2 - 1;
       // one-pole lowpass whose cutoff falls as the tail decays → warm, darkening tail
       const coeff = 0.55 * (1 - t) + 0.06;
       lp += coeff * (noise - lp);

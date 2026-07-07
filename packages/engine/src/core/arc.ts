@@ -19,13 +19,31 @@ const ZERO: ArcMacros = {
   density: 0,
 };
 
+// Single-slot memo: within one frame the engine reads the macros for the SAME
+// (arc, position) up to ~10 times — six arc source ports, both scenes' applyArc,
+// and the host darkness. Nothing mutates a returned macros object (or a live
+// dna.arc), so all those reads can share one allocation.
+let memoArc: ArcKeyframe[] | null = null;
+let memoPos = NaN;
+let memoOut: ArcMacros | null = null;
+
 /**
  * Interpolate the arc macros at a position in [0,1] from the keyframes (assumed
  * sorted by position). Positions outside the keyframe span clamp to the ends.
+ * The returned object is shared with subsequent same-argument calls — read-only.
  */
 export function macrosAt(arc: ArcKeyframe[], position: number): ArcMacros {
-  if (arc.length === 0) return { ...ZERO };
   const p = clamp(position, 0, 1);
+  if (memoOut !== null && memoArc === arc && memoPos === p) return memoOut;
+  const out = computeMacrosAt(arc, p);
+  memoArc = arc;
+  memoPos = p;
+  memoOut = out;
+  return out;
+}
+
+function computeMacrosAt(arc: ArcKeyframe[], p: number): ArcMacros {
+  if (arc.length === 0) return { ...ZERO };
   const first = arc[0]!;
   const last = arc[arc.length - 1]!;
   if (p <= first.position) return { ...first.macros };

@@ -109,6 +109,29 @@ function buildHighpass(params: Record<string, Scalar>): BuiltNode {
   };
 }
 
+/** Generated-IR cache: the IR is deterministic in (sampleRate, decay, preDelay), and
+ *  crossfading back into a scene rebuilds its reverb — regenerating seconds of stereo
+ *  tail on the main thread mid-fade is a hitch we can skip. Small LRU (IRs are ~MBs). */
+const irCache = new Map<string, Float32Array[]>();
+const IR_CACHE_MAX = 3;
+
+function cachedHallIR(sampleRate: number, decaySec: number, preDelaySec: number): Float32Array[] {
+  const key = `${sampleRate}|${decaySec}|${preDelaySec}`;
+  const hit = irCache.get(key);
+  if (hit) {
+    irCache.delete(key); // re-insert → most recently used
+    irCache.set(key, hit);
+    return hit;
+  }
+  const ir = generateHallIR(sampleRate, decaySec, preDelaySec);
+  irCache.set(key, ir);
+  if (irCache.size > IR_CACHE_MAX) {
+    const oldest = irCache.keys().next().value;
+    if (oldest !== undefined) irCache.delete(oldest);
+  }
+  return ir;
+}
+
 function buildReverb(params: Record<string, Scalar>, ir?: string): BuiltNode {
   const reverbSize = num(params, 'size', 0.5);
   const reverb = new Tone.Convolver();
@@ -128,7 +151,7 @@ function buildReverb(params: Record<string, Scalar>, ir?: string): BuiltNode {
         }
       }
       reverb.buffer = Tone.ToneAudioBuffer.fromArray(
-        generateHallIR(Tone.getContext().sampleRate, 1.4 + reverbSize * 7, 0.012 + reverbSize * 0.03),
+        cachedHallIR(Tone.getContext().sampleRate, 1.4 + reverbSize * 7, 0.012 + reverbSize * 0.03),
       );
     },
     registerPorts() { /* no exposed controls */ },
