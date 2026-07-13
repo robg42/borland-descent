@@ -479,7 +479,7 @@
         <div><b>Author</b><span>Rob</span></div>
         <div><b>Reader</b><span>Ian</span></div>
         <div><b>Scope</b><span>v1 · the loop</span></div>
-        <div><b>Updated</b><span>10 Jun 2026</span></div>
+        <div><b>Updated</b><span>13 Jul 2026</span></div>
       </div>
     </div>
     <div class="masthead__cue"><span class="arrow">↓</span> scroll to descend</div>
@@ -641,14 +641,14 @@
 
       <div class="card">
         <div class="card__rule"><span class="chip">Rule 4</span><h3>Everything modulatable is a typed, addressable port</h3></div>
-        <p>A <code>PortRef</code> is a stable string <code>"nodeId.portName"</code>. Ports have a kind — <code>scalar · unipolar · bipolar · trigger · vector</code> — and a direction. The matrix only connects type-compatible ports.</p>
+        <p>A <code>PortRef</code> is a stable string <code>"nodeId.portName"</code>. Ports have a kind — <code>scalar · unipolar · bipolar · trigger · vector · option</code> — and a direction. The matrix only connects type-compatible ports.</p>
         <dl>
           <dt>Why</dt>
           <dd>Modulation needs a vocabulary that is both stable in the saved document and richly typed at runtime. A string address survives serialisation and git diffs; the kind lets the matrix refuse nonsense instead of silently producing garbage.</dd>
           <dt>Design detail</dt>
-          <dd>Node ids are dot-free by schema, so the dot in a <code>PortRef</code> is always unambiguous. Numeric kinds interoperate — the matrix scales and curves between them — while <code>trigger</code> and <code>vector</code> only pair with their own kind. Pragmatic where it is safe, strict where it is not.</dd>
+          <dd>Node ids are dot-free by schema, so the dot in a <code>PortRef</code> is always unambiguous. Numeric kinds interoperate — the matrix scales and curves between them — while <code>trigger</code> and <code>vector</code> only pair with their own kind. <code>option</code> ports — enum choices such as oscillator or filter type — are deliberately outside the matrix: they carry no numeric range, so routing one would be meaningless; they are set directly via <code>setInputBase</code> or a <code>writeOption</code> string API. Pragmatic where it is safe, strict where it is not.</dd>
           <dt>Enforced by</dt>
-          <dd>The schema validates the <code>PortRef</code> format; <code>isCompatible()</code> in <code>core/ports.ts</code> gates every route; a registry maps abstract refs to live engine objects at build time.</dd>
+          <dd>The schema validates the <code>PortRef</code> format; <code>isCompatible()</code> in <code>core/ports.ts</code> gates every route and returns <code>false</code> for any route touching an <code>option</code> port; a registry maps abstract refs to live engine objects at build time.</dd>
         </dl>
       </div>
 
@@ -828,7 +828,7 @@
         </div>
       </div>
 
-      <p>The single zoom gesture (drag, scroll or pinch on the preview) moves you through the arc; the world changes because you touched it, not because you found a dial. Seven modulation routes wire the domains together — note they run <em>both</em> ways, and that the arc position is itself a source (its macros are output ports), so the tape degradation — pitch drift and hiss — deepens as you descend:</p>
+      <p>The single zoom gesture (drag, scroll or pinch on the preview) moves you through the arc; the world changes because you touched it, not because you found a dial. Twenty modulation routes wire the domains together — note they run <em>both</em> ways, and that the arc position is itself a source (its macros are output ports), so the tape degradation — pitch drift and hiss — deepens as you descend:</p>
 
       <table class="routes">
         <thead><tr><th>Source</th><th>Target</th><th>Curve</th><th>Direction · rate</th></tr></thead>
@@ -839,6 +839,19 @@
           <tr><td><code>masterMeter.level</code></td><td><code>bloom.strength</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
           <tr><td><code>arc.darkness</code></td><td><code>drift.depth</code></td><td>linear</td><td class="dir">arc → audio · control</td></tr>
           <tr><td><code>arc.darkness</code></td><td><code>tape.hiss</code></td><td>linear</td><td class="dir">arc → audio · control</td></tr>
+          <tr><td><code>masterMeter.level</code></td><td><code>field.glint</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>fft.high</code></td><td><code>field.glint</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>fft.mid</code></td><td><code>field.refract</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>masterMeter.level</code></td><td><code>field.lume</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>fft.low</code></td><td><code>field.presence</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>bassMeter.level</code></td><td><code>field.pulse</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>fft.high</code></td><td><code>field.flicker</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>masterMeter.level</code></td><td><code>field.sonar</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>bassMeter.level</code></td><td><code>field.maw</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>masterMeter.level</code></td><td><code>field.glow</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>bassMeter.level</code></td><td><code>field.shafts</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
+          <tr><td><code>audio.onset</code></td><td><code>field.flicker</code></td><td>linear</td><td class="dir">trigger → visual · control</td></tr>
+          <tr><td><code>audio.flux</code></td><td><code>field.glint</code></td><td>linear</td><td class="dir">audio → visual · control</td></tr>
           <tr class="r-audio"><td><code>wobble.out</code></td><td><code>voices.cutoff</code></td><td>linear</td><td class="dir">LFO → audio · audio-rate</td></tr>
         </tbody>
       </table>
