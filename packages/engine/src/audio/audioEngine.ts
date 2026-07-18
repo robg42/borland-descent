@@ -1,7 +1,7 @@
 import * as Tone from 'tone';
 import type { Patch, Scene } from '../patch/schema';
 import type { Rng } from '../core/rng';
-import { macrosAt } from '../core/arc';
+import type { ArcMacros } from '../patch/types';
 import type { SignalRegistry } from '../core/registry';
 import { createSynth, type SynthModule } from './synths';
 import { Analysers } from './analysers';
@@ -95,9 +95,10 @@ export class AudioEngine {
     this.analysers.update(dt);
   }
 
-  /** Apply arc macros to the global audio feel each frame. */
-  applyArc(position: number): void {
-    const m = macrosAt(this.patch.dna.arc, position);
+  /** Apply arc macros to the global audio feel each frame. The caller hands in
+   *  the frame's memoised macros (Engine.macros) — deriving them here allocated
+   *  a fresh object per scene per frame, pure GC pressure during crossfades. */
+  applyArc(m: ArcMacros): void {
     this.composer.density = m.density;
     this.composer.macros.darkness = m.darkness;
     this.composer.macros.dissonance = m.dissonance;

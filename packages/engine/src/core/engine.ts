@@ -569,8 +569,9 @@ export class Engine {
         if (target !== this.activeIndex) void this.beginCrossfade(target);
       }
       this.advanceCrossfade(dt);
-      this.active?.applyArc(pos);
-      this.incoming?.applyArc(pos);
+      const macros = this.macros(pos);
+      this.active?.applyArc(macros);
+      this.incoming?.applyArc(macros);
       if (this.running) this.updateTempo(dt, pos);
       this.active?.tick(dt); // refresh audio features before the matrix reads them
       this.incoming?.tick(dt);
@@ -604,8 +605,9 @@ export class Engine {
         if (target !== this.activeIndex) void this.beginCrossfade(target);
       }
       this.advanceCrossfade(dt);
-      this.active?.applyArc(pos);
-      this.incoming?.applyArc(pos);
+      const macros = this.macros(pos);
+      this.active?.applyArc(macros);
+      this.incoming?.applyArc(macros);
       this.updateTempo(dt, pos);
       this.matrix?.evaluateControl(dt);
     }, 250); // ~4 Hz

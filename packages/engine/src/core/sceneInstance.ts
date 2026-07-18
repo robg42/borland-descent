@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import type { Patch, Scene } from '../patch/schema';
+import type { ArcMacros } from '../patch/types';
 import type { SignalRegistry } from './registry';
 import type { Rng } from './rng';
 import { AudioEngine } from '../audio/audioEngine';
@@ -61,8 +62,8 @@ export class SceneInstance {
   }
 
   /** Apply arc macros to the audio feel for this frame (visuals: VisualHost.setArc). */
-  applyArc(position: number): void {
-    this.audio?.applyArc(position);
+  applyArc(macros: ArcMacros): void {
+    this.audio?.applyArc(macros);
   }
 
   /** Per-frame feature refresh (bands/flux/onset) — before the matrix reads. */
