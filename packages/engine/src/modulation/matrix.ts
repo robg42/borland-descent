@@ -50,6 +50,24 @@ export class Matrix {
    *  are excluded from per-target smoothing so the attack stays instant. */
   private readonly triggerRouteIds = new Set<string>();
   private readonly triggerEnv = new Map<string, number>();
+  /** Reused per frame by evaluateControl — cleared, never reallocated. */
+  private readonly evalTargets = new Map<string, number>();
+
+  // Reader callbacks for evaluateControlTargets, allocated once per Matrix
+  // rather than as three fresh closures on every frame of the control loop.
+  private readonly readRouteSource = (route: ModulationRoute): number | undefined =>
+    this.triggerRouteIds.has(route.id)
+      ? this.triggerEnv.get(route.id)
+      : this.registry.getOutput(route.source)?.read();
+  private readonly baseOfTarget = (ref: string): number | undefined => this.registry.getInput(ref)?.base;
+  private readonly spanOfTarget = (ref: string): number => {
+    // amount is a fraction of the target port's range (min/max from the port
+    // definition); ports without declared bounds keep the legacy 1:1 scale.
+    const inp = this.registry.getInput(ref);
+    if (!inp || inp.min === undefined || inp.max === undefined) return 1;
+    const span = inp.max - inp.min;
+    return Number.isFinite(span) && span > 0 ? span : 1;
+  };
 
   constructor(
     private readonly routes: ModulationRoute[],
@@ -120,19 +138,10 @@ export class Matrix {
     }
     const targets = evaluateControlTargets(
       this.controlRoutes,
-      (route) =>
-        this.triggerRouteIds.has(route.id)
-          ? this.triggerEnv.get(route.id)
-          : this.registry.getOutput(route.source)?.read(),
-      (ref) => this.registry.getInput(ref)?.base,
-      (ref) => {
-        // amount is a fraction of the target port's range (min/max from the port
-        // definition); ports without declared bounds keep the legacy 1:1 scale.
-        const inp = this.registry.getInput(ref);
-        if (!inp || inp.min === undefined || inp.max === undefined) return 1;
-        const span = inp.max - inp.min;
-        return Number.isFinite(span) && span > 0 ? span : 1;
-      },
+      this.readRouteSource,
+      this.baseOfTarget,
+      this.spanOfTarget,
+      this.evalTargets,
     );
     for (const [ref, raw] of targets) {
       const inp = this.registry.getInput(ref);

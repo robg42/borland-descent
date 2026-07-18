@@ -179,3 +179,20 @@ describe('matrix — restoreDroppedControlTargets (studio route removal)', () =>
     expect(writes).toHaveLength(0); // target survives → no restore write
   });
 });
+
+describe('evaluateControlTargets — reusable output map', () => {
+  it('clears and reuses a caller-supplied map without changing results', async () => {
+    const { evaluateControlTargets } = await import('../src/modulation/evaluate');
+    const routes: ModulationRoute[] = [
+      { id: 'r1', source: 'a.out', target: 'b.in', amount: 0.5, curve: 'linear', smoothing: 0, rate: 'control', enabled: true },
+    ];
+    const read = () => 1;
+    const base = () => 0;
+    const reused = new Map<string, number>([['stale.ref', 99]]);
+    const first = evaluateControlTargets(routes, read, base, undefined, reused);
+    expect(first).toBe(reused); // same instance handed back
+    expect(first.has('stale.ref')).toBe(false); // cleared before writing
+    const fresh = evaluateControlTargets(routes, read, base, undefined);
+    expect([...first.entries()]).toEqual([...fresh.entries()]); // identical output either way
+  });
+});

@@ -20,8 +20,11 @@ export function evaluateControlTargets(
   readSource: (route: ModulationRoute) => number | undefined,
   baseOf: (ref: string) => number | undefined,
   spanOf?: (ref: string) => number,
+  out?: Map<string, number>,
 ): Map<string, number> {
-  const targets = new Map<string, number>();
+  // Callers on the frame loop pass a reusable map to avoid a per-frame allocation.
+  const targets = out ?? new Map<string, number>();
+  targets.clear();
   for (const r of routes) {
     if (r.enabled === false || r.rate !== 'control') continue;
     const src = readSource(r);
