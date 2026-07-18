@@ -7,6 +7,7 @@ import type { SynthModule } from '../synths/types';
 import type { Analysers } from '../analysers';
 import { TapeWarmth } from './tapeWarmth';
 import { generateHallIR } from './hallIR';
+import { createAsyncCache } from './irCache';
 import { smoothWrite } from '../../core/params';
 
 /** The uniform contract every built audio-graph node exposes. */
@@ -109,6 +110,17 @@ function buildHighpass(params: Record<string, Scalar>): BuiltNode {
   };
 }
 
+/** Every scene builds its own reverb, and the same IR file is referenced by all of
+ *  them — fetch and decode it once per URL for the life of the page, not per scene
+ *  build (a crossfade used to re-download and re-decode a ~2 MB wav mid-descent).
+ *  The cache holds raw AudioBuffers; each Convolver gets its own ToneAudioBuffer
+ *  wrapper so disposing one scene's reverb never frees a buffer another is using. */
+const loadIrBuffer = createAsyncCache<AudioBuffer>(async (url) => {
+  const raw = (await Tone.ToneAudioBuffer.fromUrl(url)).get();
+  if (!raw) throw new Error(`IR decode produced no buffer: ${url}`);
+  return raw;
+});
+
 function buildReverb(params: Record<string, Scalar>, ir?: string): BuiltNode {
   const reverbSize = num(params, 'size', 0.5);
   const reverb = new Tone.Convolver();
@@ -116,16 +128,17 @@ function buildReverb(params: Record<string, Scalar>, ir?: string): BuiltNode {
     input: reverb,
     output: reverb,
     async init() {
-      reverb.buffer = Tone.ToneAudioBuffer.fromArray(
-        generateHallIR(Tone.getContext().sampleRate, 1.4 + reverbSize * 7, 0.012 + reverbSize * 0.03),
-      );
       if (ir) {
         try {
-          await reverb.load(ir);
+          reverb.buffer = new Tone.ToneAudioBuffer(await loadIrBuffer(ir));
+          return;
         } catch (err) {
           console.warn('[borland] reverb IR failed to load; using the generated hall.', err);
         }
       }
+      reverb.buffer = Tone.ToneAudioBuffer.fromArray(
+        generateHallIR(Tone.getContext().sampleRate, 1.4 + reverbSize * 7, 0.012 + reverbSize * 0.03),
+      );
     },
     registerPorts() { /* no exposed controls */ },
     dispose() { reverb.dispose(); },
