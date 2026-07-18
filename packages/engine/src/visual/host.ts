@@ -131,7 +131,7 @@ export class VisualHost {
   readonly reducedMotion: boolean;
 
   // ---- perf instrumentation (C P1) ----
-  private frameEma = 16.7;         // EMA of render time (ms); prime at 60 fps
+  private frameEma = 16.7;         // EMA of frame interval (ms); prime at 60 fps
   private overBudgetAcc = 0;       // seconds spent over DEGRADE_THRESHOLD_MS
   private underBudgetAcc = 0;      // seconds spent under RECOVER_THRESHOLD_MS
   private degradeStep = 0;         // 0 = full, 1 = DPR 1.5, 2 = DPR 1, 3 = bloom off
@@ -363,7 +363,6 @@ export class VisualHost {
 
   render(timeSeconds: number, deltaSeconds: number): void {
     if (this.contextLost || !this.active) return;
-    const t0 = performance.now();
     this.active.layer.update(timeSeconds);
     if (this.incoming && this.rtA && this.rtB) {
       // Fade: each layer renders once into its pooled target, the blend pass
@@ -378,12 +377,17 @@ export class VisualHost {
     }
     this.composer.render(deltaSeconds);
 
-    // Frame-time EMA (α ≈ 0.1 — slow, stable readout).
-    const elapsed = performance.now() - t0;
-    this.frameEma += 0.1 * (elapsed - this.frameEma);
-
-    // Auto-degrade / recover ladder.
-    if (deltaSeconds > 0) this.updateDegrade(deltaSeconds);
+    // Frame-interval EMA (α ≈ 0.1 — slow, stable readout). The interval between
+    // rAF ticks is the only number that sees GPU-bound frames: timing the CPU
+    // around composer.render() measures draw-call submission and misses async
+    // GPU execution, so the heavy sim scenes never tripped the ladder on
+    // exactly the phones it exists for. Intervals over 250 ms are pauses
+    // (tab switch, resume), not slow frames, and reduced-motion draws are
+    // intentionally sparse — neither feeds the ladder.
+    if (!this.reducedMotion && deltaSeconds > 0 && deltaSeconds <= 0.25) {
+      this.frameEma += 0.1 * (deltaSeconds * 1000 - this.frameEma);
+      this.updateDegrade(deltaSeconds);
+    }
   }
 
   private updateDegrade(dt: number): void {
