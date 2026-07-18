@@ -50,6 +50,8 @@ export class Engine {
   private readonly transport = new Transport();
   private readonly rng: Rng;
   private readonly reducedMotion: boolean;
+  /** Time since the last reduced-motion draw; starts high so the first frame paints. */
+  private reducedMotionAccum = 1;
   private host: VisualHost | null = null;
   private active: SceneInstance | null = null;
   private masterBus: Tone.Gain | null = null;
@@ -577,8 +579,19 @@ export class Engine {
       this.incoming?.tick(dt);
       this.host?.setArc(this.darkness(pos));
       this.matrix?.evaluateControl(dt);
-      const time = this.reducedMotion ? 0 : this.transport.seconds;
-      this.host?.render(time, dt);
+      if (this.reducedMotion) {
+        // Reduced motion froze the time uniform but still redrew (and stepped the
+        // stateful sims) at 60 fps — near-identical frames at full GPU cost. Draw
+        // at ~10 fps instead; the audio-side work above keeps its full rate, and
+        // the accumulated dt keeps sim time consistent with wall time.
+        this.reducedMotionAccum += dt;
+        if (this.reducedMotionAccum >= 0.1) {
+          this.host?.render(0, this.reducedMotionAccum);
+          this.reducedMotionAccum = 0;
+        }
+      } else {
+        this.host?.render(this.transport.seconds, dt);
+      }
       this.rafId = requestAnimationFrame(tick);
     };
     this.rafId = requestAnimationFrame(tick);
